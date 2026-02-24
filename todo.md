@@ -1,5 +1,15 @@
 # todo
 
+## Next:
+
+read on 
+    - TAL lit/tal-toplas.pdf
+    - DTAL lit/OGI-CSE-99-008.pdf
+
+Question: What is the system being run on?
+
+---
+
 - read up on risc v, especially stack.
 
 - Dependently Typed Assembler Language (DTAL)

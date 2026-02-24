@@ -41,3 +41,5 @@ As in, just jumps and branches
 
 If not using an explicit loop notation, how would I register a loop? Jumping to
 earlier point in code in general?
+
+If keeping to risc-v, a do-loop notation might just be illegal.
