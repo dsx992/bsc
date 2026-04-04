@@ -1,8 +1,20 @@
 \section{Typed Assembly Languages}
 
-Typed assembly langauge (TAL) provides types to to memory and registers through
-assertions on labels. It does not make much sense to "type" an instruction, as
-these already are already defined on only one type.
+% Typed assembly language (TAL) provides types to to memory and registers through
+% assertions on labels. It does not make much sense to "type" an instruction, as
+% these already are already defined on only one type.
+Typed assembly languages (TAL) define some manner of types to an assembly
+program.
+Assembly languages are low-level, so the degree of typing, or where these types even occur may not be obvious.
+Instructions in assembly work on words and immediate values, and these instructions are strictly distinct with with no overloading---\footnote{not AI} so the notion of types here seems unneeded.
+Indeed instructions are not typed in TALs, but labels are.
+One simple implementation of this---which types registers---is Morrisetts TAL-0.
+Morrisett extends this language to work on memory (TAL-0), and ??? extends types with dependently typed assembly (DTAL).
+
+The motivation for using TALs is commonly attributed to safety and correctness.
+
+\subsection{TAL-0}
+
 
 Label types contain information on what types are contained within relevant
 registers and memory addresses.

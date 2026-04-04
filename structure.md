@@ -6,10 +6,12 @@
 ## intro
 
 > Well-typed programs don't go wrong
+
 Robin Milner
 
 > Type systems for programming languages are a syntactic mechanism for
 > enforcing abstraction
+
 J. Reynolds
 
 compare to SFI (software fault isolation)
@@ -30,6 +32,11 @@ compare to SFI (software fault isolation)
 - Branch prediction
     - reachability?
 
+### Problems with cache (in modern systems)
+
+- Possibly use no cache at all (this is the way i'm going)
+- Still, how could TAL be used for WCET analysis in cache systems?
+
 ## ssd\_os and the machines it runs on
 
 - How expensive are ops, what kind of pipelining is used?
@@ -38,6 +45,8 @@ compare to SFI (software fault isolation)
 ## Exploration of TAL
 
 ### TAL-0 to TAL-4 (as literature describes them (Morrisett and derivatives))
+
+#### Preservation of types (tal-0)
 
 ### What is "typed"
 
@@ -54,6 +63,27 @@ compare to SFI (software fault isolation)
 ### DTAL
 
 - Singleton types
+
+they call `int array(n)` a "type index expression". This could be extended with
+scratch/shared, so the productions
+
+    e ::= scratch e
+        | shared e
+
+to give, e.g., `shared int array(n)`, being an int array of size n in shared
+memory.
+
+alternatively one could consider `int array(n)` as also the pointer to the
+array, and use bounds checks to assert that it is within bounds of the scratch
+or shared memory. This is more verbose, and it requires to somewhat think
+differently of th etype index expressions, so I am not confident it is a good
+idea.
+
+Type index expressions are themselves typed, but to avoid confusion they refer
+to them as sorts.
+
+
+### TALT (TAL two)
 
 ## Possible properties of verification with TAL
 
@@ -98,6 +128,9 @@ when I look at riscv.
       this is what a loop does, so why not have a label or dependency called
       "iterates over x".
 
+PLDI mentions types of loops. This could be an important distinctuion for what
+kind of loops I want to permit.
+
 ### memory
 
 - cache will probably play a big role, so how can TAL be used to make
@@ -109,7 +142,20 @@ when I look at riscv.
   `sp : 't :: int array` denotes some element at the top of a stack (int just
   being the default) All types must have word size, i think.
 
+
 ## WCET analysis tool
+
+### Why focus on memory
+
+From the bsc tool, the process is quite simple, and does not take into account
+pipelines and is generally very simplistic in regards to instruction times.
+
+The focus lies in memory time (thankfully the abstract machine in question also
+has a simple memory layout), which is - on an instruction basis - the slowest
+and most varying part. The biggest bottleneck.
+"The DRAM access time is one to two orers of magnitude longer thanthe processor
+cycle time (tens of nanoseconds, compared to less than one nanosecond)"
+[digital design \& computer architecture, ch. 8]
 
 ### Working with
 
@@ -130,6 +176,17 @@ Section on how compiling _could_ work? Closures etc.
     - Torbens PLDI region types
     - subranges
 - let all label types return an upper bound execution time?
+
+#### Implicitly dependently typed assembly
+
+- Memory can be typed, and lookups will have some subtype of either high or
+  lowspeed memory. This information can be carried with the code.
+
+proof carrying code => (worst-case execution) time carrying types
+
+- Maybe this works for caches, too? As well as liveness analysis of pages
+
+- Bounded polymorphism
 
 ### Program
 
