@@ -1,3 +1,13 @@
+# TAL
+
+## Coercion
+
+It is important to be able to coerce memory from scratch/shared arrays to just
+arrays.
+
+If a register contains an address, then this should be able to be coerced into
+either scratch or shared memory.
+
 # Syntax of TAL risc-v programs
 
     Program = Text
@@ -26,13 +36,14 @@
 
 where `v` and `w` are values (constants?).
 
-
 # abstract machine
 
 Consists of memory and something that runs instructions -- here the pipeline.
 Pipelines could be (from compsys) 5 way, 9 way out of order, whatever, what
 have you.
 
+As in DTAL paper, model as register, heap, stack; Split heap into scratch and
+shared.
 
 
 ## Memory

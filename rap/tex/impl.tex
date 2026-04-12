@@ -1,0 +1,28 @@
+\section{Implementation}
+
+Using dependently typed assembly language based on [OGI], 
+...
+
+\subsection{Theory (tentative title)}
+
+\subsubsection{Abstract machine}
+This project focuses on \lstinline{ssd_os} and the machine that it runs on (or
+perhaps will be run on) is a realtime system, and has no cache, but two states
+of memory; scratch and shared. Scratch is the fastest one, and acts like manual
+cache.
+
+\subsubsection{Extended DTAL (and possible exclusions)}
+The only extension to DTAL that is needed is to type which kind of memory is
+used; scratch or shared. To this end, we need the constructors
+\begin{align}
+    \epsilon ::&= &\texttt{scratch}\ \epsilon \\
+             &| &\texttt{shared}\ \epsilon
+\end{align}
+this makes it possible to create, for instance, $\texttt{scratch}\ \alpha\ \texttt{array}$.
+
+it could be considered a shorthand of $\texttt{\&scratch_start} \leq \alpha\
+\texttt{array} < \texttt{\&scratch_end}$ if $\alpha\ \texttt{array}$ could take
+to mean the address.
+
+
+\subsection{Code (tentative title)}
