@@ -8,8 +8,10 @@ Using dependently typed assembly language based on [OGI],
 \subsubsection{Abstract machine}
 This project focuses on \lstinline{ssd_os} and the machine that it runs on (or
 perhaps will be run on) is a realtime system, and has no cache, but two states
-of memory; scratch and shared. Scratch is the fastest one, and acts like manual
-cache.
+of memory; scratch and shared. Scratch is fast, and acts like manual
+caching, while shared is slow.
+The naming implies concurrency in that multiple threads may share some memory
+-- as is exceedingly common.
 
 \subsubsection{Extended DTAL (and possible exclusions)}
 The only extension to DTAL that is needed is to type which kind of memory is

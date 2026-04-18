@@ -8,42 +8,30 @@ arrays.
 If a register contains an address, then this should be able to be coerced into
 either scratch or shared memory.
 
-# Syntax of TAL risc-v programs
-
-    Program = Text
-    Text    = Label Text
-            | Insn Text
-            | EOF
-
-    Insn    := add rd, rs1, rs2
-            | addi ...
-    Reg     := ra | t0 | t1 ...
-
-    Type    = int
-            | float
-            | Type array
-    Op      = < | > | <= | >= | ==
-
-    Label   = name: { Depend } [ Map ]
-    Mapping = Map | Map, Mapping
-    Map     = Reg: Type
-            | Reg: Type(v)
-    Depend  = Vars '|' Conds
-    Var     = v: Type
-    Vars    = Var | Var, Vars
-    Cond    = v Op w
-    Conds   = Cond | Cond, Conds
-
-where `v` and `w` are values (constants?).
-
 # abstract machine
 
 Consists of memory and something that runs instructions -- here the pipeline.
 Pipelines could be (from compsys) 5 way, 9 way out of order, whatever, what
 have you.
+May not be relevant.
 
 As in DTAL paper, model as register, heap, stack; Split heap into scratch and
 shared.
+
+# Syntax
+
+As Xi's DTAL however with
+
+..
+Type memory variable    μ
+type memory             Μ := Scratch | Shared | Stack | μ
+..
+types                   τ := Μ τ array(x)
+
+should Stack be a type constructor?
+
+# semantics
+
 
 
 ## Memory
