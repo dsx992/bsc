@@ -1,30 +1,51 @@
-\section{Implementation}
+\section{Implementation (wrong title)}
 
-Using dependently typed assembly language based on [OGI], 
-...
+\subsection{Domain}
 
-\subsection{Theory (tentative title)}
+Only a small subset of what has been discussed will be implemented, namely
+typing memory region types for the scratchpad system model.
+The typing rules will ensure that it is known before runtime of which memory
+region each load/store operation writes or reads from.
+Since the system works without cache (scratch region effectively taking its
+place) all IO has a set cost, and as do the arithmetic instructions. The
+problem then boils down to essentially summing up the cost of each instruction.
 
-\subsubsection{Abstract machine}
-This project focuses on \lstinline{ssd_os} and the machine that it runs on (or
-perhaps will be run on) is a realtime system, and has no cache, but two states
-of memory; scratch and shared. Scratch is fast, and acts like manual
-caching, while shared is slow.
-The naming implies concurrency in that multiple threads may share some memory
--- as is exceedingly common.
-
-\subsubsection{Extended DTAL (and possible exclusions)}
-The only extension to DTAL that is needed is to type which kind of memory is
-used; scratch or shared. To this end, we need the constructors
-\begin{align}
-    \epsilon ::&= &\texttt{scratch}\ \epsilon \\
-             &| &\texttt{shared}\ \epsilon
-\end{align}
-this makes it possible to create, for instance, $\texttt{scratch}\ \alpha\ \texttt{array}$.
-
-it could be considered a shorthand of $\texttt{\&scratch_start} \leq \alpha\
-\texttt{array} < \texttt{\&scratch_end}$ if $\alpha\ \texttt{array}$ could take
-to mean the address.
+The solution is somewhat novel, since there is a painful lack of control-flow.
+In the theory description some outline of how this may be thought of and
+implemented is discussed. The biggest constraint and factor of deciding that
+control-flow is out of scope is due to the solving process (predicate logic SAT
+solving).
 
 
-\subsection{Code (tentative title)}
+
+
+
+
+% Using dependently typed assembly language based on [OGI], 
+% ...
+% 
+% \subsection{Theory (tentative title)}
+% 
+% \subsubsection{Abstract machine}
+% This project focuses on \lstinline{ssd_os} and the machine that it runs on (or
+% perhaps will be run on) is a realtime system, and has no cache, but two states
+% of memory; scratch and shared. Scratch is fast, and acts like manual
+% caching, while shared is slow.
+% The naming implies concurrency in that multiple threads may share some memory
+% -- as is exceedingly common.
+% 
+% \subsubsection{Extended DTAL (and possible exclusions)}
+% The only extension to DTAL that is needed is to type which kind of memory is
+% used; scratch or shared. To this end, we need the constructors
+% \begin{align}
+%     \epsilon ::&= &\texttt{scratch}\ \epsilon \\
+%              &| &\texttt{shared}\ \epsilon
+% \end{align}
+% this makes it possible to create, for instance, $\texttt{scratch}\ \alpha\ \texttt{array}$.
+% 
+% it could be considered a shorthand of $\texttt{\&scratch_start} \leq \alpha\
+% \texttt{array} < \texttt{\&scratch_end}$ if $\alpha\ \texttt{array}$ could take
+% to mean the address.
+% 
+% 
+% \subsection{Code (tentative title)}

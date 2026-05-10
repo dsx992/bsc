@@ -14,3 +14,40 @@
 \usepackage{subfiles}
 \usepackage{xspace}
 \usepackage{cite}
+\usepackage{dirtytalk}
+\usepackage{proof}
+
+\lstset{
+    basicstyle=\ttfamily\small,
+    keywordstyle=\bfseries,
+    % numbers=left,
+    % numberstyle=\ttfamily\tiny,
+    showstringspaces=false,
+    extendedchars = true,
+    breaklines=true,
+    literate=%
+    {æ}{{\ae}}1
+    {ø}{{\o}}1
+    {å}{{\aa}}1,
+    escapeinside={|*}{*|},
+}
+
+\newcommand{\talz}{\texttt{tal0}\xspace}
+
+\newcommand{\cons}{\texttt{::}\xspace}
+
+\newcommand{\var}[1]{\texttt{#1}\xspace}
+\newcommand{\scratch}{\texttt{scratch}\xspace}
+\newcommand{\shared}{\texttt{shared}\xspace}
+\newcommand{\ttop}{\texttt{top}\xspace}
+\newcommand{\emptystack}{\texttt{[]}\xspace}
+
+\newcommand{\sub}{\texttt{sub}\xspace}
+\newcommand{\subi}{\texttt{subi}\xspace}
+\newcommand{\add}{\texttt{add}\xspace}
+\newcommand{\addi}{\texttt{addi}\xspace}
+\newcommand{\mul}{\texttt{mul}\xspace}
+\newcommand{\muli}{\texttt{muli}\xspace}
+
+\newcommand{\incr}{\texttt{incr}\xspace}
+\newcommand{\decr}{\texttt{decr}\xspace}

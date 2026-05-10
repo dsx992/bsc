@@ -1,0 +1,213 @@
+\section{Getting to a language}
+This section describes the process, the steps, and the considerations for
+designing the risc-v styled typed assembly language suited for static
+worst-case execution time analysis.
+Only a subset of the idea of the language will be fully fleshed out, and an
+even smaller part implemented.
+The \say{full} language requires much too complex typing that involves
+constraint satisfaction of predicate logic, far out of the scope of this
+project, unfortunately.
+
+\subsection{Strays from risc-v}
+As with the TALs introduced above, there is little reason to distinguish
+between immediate instructions and register instructions, meaning that \subi
+and \sub can be treated the same. This is due to the value type that they all
+share in some form, defined in some way as
+\begin{equation*}
+    \begin{array}{llcl}
+        \text{value}      & v     & ::= & c \mid r \\
+    \end{array}
+\end{equation*}
+For code generation, these will have to be reintroduced, but this is trivial,
+since the value field will either be an immediate value or a register.
+
+\subsection{Stacks and arrays}
+
+This section describes how the array and stack types work with each other.
+From the syntax we have
+
+\begin{equation*}
+    \begin{array}{llcl}
+        \text{region memory types variables} & \mu & & \\
+        \text{region memory types}      & M     & ::= & scratch \mid shared \mid \mu \\
+        \text{stack types variables}    & \rho  & & \\
+        \text{stack types}              & S     & ::= & [] \mid \rho \mid \tau :: S \\
+        \text{types}                    & \tau  & ::= & .. \mid
+                                                        \tau\ array(x)
+                                                        \\
+    \end{array}
+\end{equation*}
+
+Stack types can be instantiated with
+
+\begin{equation*}
+    \infer[(::)]
+    { \Phi; \Delta; (R, S) \vdash \subi\ r_d, r_s, imm; I}
+    { \Phi; \Delta; (R, S) \vdash r_s : \rho 
+    & imm / 4 = n
+    & n > 0
+    & \Phi; \Delta; (R[r_d : top_0 :: \cdots :: top_n :: \rho], S) \vdash 
+    }
+\end{equation*}
+
+This of course lacks some expressiveness, since rarely is an extended 
+
+this immediately creates a problem, since only the risc-v stack grows
+downwards, and the region stacks (of which allocations happen to). However,
+there is a solution in the conceptualization of these stacks.
+
+An example program that stores some values on the stack would look like the
+following
+\begin{lstlisting}[gobble=4]
+    start:  [a0: int(i), a1: int(j), a2: int(k), a3: int(l)]
+            subi    sp, sp, 16      ; sp: scratch top :: top :: top :: top :: 'r
+            mv      a4, sp
+    coerce: ('m)
+            [a0: int(i), a1: int(j), a2: int(k), a3: int(l), a4: 'm int array(4)]
+            lw      a0, 0(a4)       ; a4: scratch int(i) :: ..
+            lw      a1, 4(a4)       ; a4: scratch int(i) :: int(j) :: ..
+            lw      a2, 8(a4)       ; a4: scratch int(i) :: int(j) :: int(k) ..
+            lw      a3, 12(a4)      ; a4: scratch int(i) :: int(j) :: int(k) :: int(l) :: 'r
+\end{lstlisting}
+% \textit{dependent types are not making it into the implementation, and all arrays will be statically sized}
+\cons is right associative, so $\texttt{scratch top :: top ..} =
+\texttt{scratch} (\texttt{top :: top ..})$
+
+\ttop can be coerced into any type, and is used to initialize the array.
+
+A stack $[\tau_0 \cons \cdots \cons \tau_n]$ can be coerced into an array
+$\tau\ array(\var m)$ iff $m < n$ and $\tau = tau_i$ for all $0 \leq i < m$
+
+\var{'m} is a type variable that will be unified to type \scratch.
+
+Since the stack pointer points to the stack, and the target is a specific ssd
+os system (link) the type of \var{sp} will always be $\scratch \mathrm S$.
+
+Another use is working with the arena allocators. They are simple, and also
+work like a stack, but these grow upwards, which is opposite the call stack and
+therefore the typing rules would not work.
+
+\begin{lstlisting}[language=C, gobble=4]
+    struct memory_region
+    {
+        uint8_t *start;
+        size_t   size;
+    };
+
+    struct arena_allocator
+    {
+        struct memory_region region;
+        size_t               allocated;
+    };
+\end{lstlisting}
+
+Essentially, the regions type --- while in C is just a pointer --- is a
+lifted stack type containing the whole region.
+When memory is allocated in an arena, the type of the returned memory is a
+coerced slice of the arena.
+If an arena has region of type $\ttop_0 \cons \cdots \cons \ttop_n \cons
+\emptystack$, then an offset of $k$ words gives the stack $\ttop_k \cons \cdots
+\cons \ttop_n \cons \emptystack$, which can be coerced into an array of fitting
+type and size.
+
+Since the language --- like other TALs --- only work on word sized types but
+operations on memory in risc-v (like moving the stack pointer) is not aligned,
+we want to constrain the syntax to only allow word-size operations.
+Only stacks can change size (through arithmetic operations on a stack pointer)
+so it suffices to introduce instructions \incr and \decr.
+They may be best explained through their code generation, shown in figure \ref{fig:incr-codegen}
+\begin{figure}
+    \begin{equation*}
+        \begin{array}{lcl}
+            \incr\ r_d,\ r_s,\ v
+            & \mapsto
+            & \left\{
+                \begin{array}{lcl}
+                    \begin{array}{llll}
+                        \mul, \quad    & r_d,\ & v,\   & wordsize \\
+                        \sub,           & r_d,  & r_s,  & rd
+                    \end{array}
+                    & \text{iff}
+                    & \Phi; \Delta; R \vdash v : \text{is register}
+                    \\
+                    \\
+                    \begin{array}{llll}
+                        \subi, \quad    & r_d,  & r_s,  & v \cdot wordsize
+                    \end{array}
+                    & \text{iff}
+                    & \Phi; \Delta; R \vdash v : \text{is immediate value}
+                \end{array}
+            \right.
+            \\
+            \\
+            \decr\ r_d,\ r_s,\ v
+            & \mapsto
+            & \left\{
+                \begin{array}{lcl}
+                    \begin{array}{llll}
+                        \mul, \quad    & r_d,\ & v,\   & wordsize \\
+                        \add,           & r_d,  & r_s,  & rd
+                    \end{array}
+                    & \text{iff}
+                    & \Phi; \Delta; R \vdash v : \text{is register}
+                    \\
+                    \\
+                    \begin{array}{llll}
+                        \addi, \quad    & r_d,  & r_s,  & v \cdot wordsize
+                    \end{array}
+                    & \text{iff}
+                    & \Phi; \Delta; R \vdash v : \text{is immediate value}
+                \end{array}
+            \right.
+        \end{array}
+    \end{equation*}
+    \caption{Code generation for \incr and \decr}
+    \label{fig:incr-codegen}
+\end{figure}
+
+\subsection{Abstract machine}
+
+Unlike other TAL abstract machines, I am omitting the stack, since it will be used as a normal register (\var{sp}).
+
+\subsection{Dependent types}
+
+Because of the restrictions on the implementation domain, we can restrict the
+dependent types to contain fewer index propositions.
+
+% Dependent types are a mess, since
+
+\begin{lstlisting}
+    L0:     {n: int | n > 0}
+            [a0: int(n)]
+            muli    a1, a0, 4       ; a1: n * 4
+            sub     sp, sp, a1      ; sp: top_0 :: ... :: top_n :: sp
+            mv      a1, a0
+            mv      a0, sp
+    L1:     ('m)
+            {n: int | n > 0}
+            [a0: 'm int array(n), a1: int(n)]
+\end{lstlisting}
+Is a valid program. The two \var{n}s are locally scoped, so they share no
+information, however they should represent the same value in this case.
+Since \var n is not known, only that it is a natural non-zero number, it is not
+known how many words are pushed to the stack, therefore its type depends on
+\var n.
+
+However, since the lack of control flow, loops do not exist and the language
+turns novel. Then there is no way to store \var n words, and therefore no
+reason to be able to allocate a variable amount of words. The language reduces
+to constant expressions. In future work, reintroducing control flow is a must,
+and as discussed previously (TODO: HOPEFULLY) dependent types can be used to
+infer some loop iterations. For this, we would sorely miss type variables in
+index expressions.
+
+
+this reduces stack type rules to
+\begin{equation*}
+    \infer[(\sub)]
+    {\Phi;\ \Delta;\ }
+    {}
+\end{equation*}
+
+
+\subsection{Coercion}

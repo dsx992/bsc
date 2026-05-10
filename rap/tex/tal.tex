@@ -1,13 +1,96 @@
 \section{Typed Assembly Languages}
 
-Typed assembly languages are a group of languages (not unlike assembly) that in
-varying degrees introduce type safety.
-The primary motivation for typed assembly languages is type safety and is
-strongly related to proof-carrying code\cite{attpl}.
+Typed assembly languages are a group of languages (not unlike assembly) or
+rather just an idea that in varying degrees introduce type safety to programs
+written or compiled to assembly. The primary motivation for typed assembly
+languages is type safety and is strongly related to proof-carrying
+code\cite[ch. 5]{attpl}.
+
+In this section we will cover the canonical reason for introducing types as
+well as exploring levels of typing and implementations.
+Most of this section is based on Greg Morrissetts work whom has contributed
+most of the published research in this topic.
+
+
+\subsection{Why type safety in assembly?}
+
+Running untrusted code
+
+\subsection{TAL-0}
+As with PCC, it is of great interest to prove correctness of code. In modern
+programming languages this is done in part with a strongly typed syntax and
+semantics as \say{well-typed programs cannot \say{go wrong}}, thus moving some
+of the burden of correctness to the type system.
+The goal of TAL-0 (besides being a paedological tool from Morrissett to
+introduce readers to typed assembly) is to restrict control-flow to ensure
+control-flow safety of assembly code.
+
+An example of a potential mishap --- and how it may look solved --- may be as
+the following risc-v snippet; jumping to the contents of a register,
+\emph{hopefully} an address.
+\begin{lstlisting}
+jump:
+        jr      a0
+\end{lstlisting}
+This short example showcases how naive the machine is, as no checks need be
+performed, and no assurance is made, that `a0` does indeed contain a valid code
+address.
+\talz solves this by special syntax and an abstract machine that only allows
+some evaluation; the above assembly snippet would be disallowed by the
+evaluation rules.
+
+\begin{figure}
+    \begin{equation*}
+        \begin{array}{l|r}
+            \begin{array}{lllr}
+                r   & ::=   &       & \textit{registers:} \\
+                    &       & \texttt{r1} \mid \cdots \mid \texttt{rk} & \\
+                v   & ::=   &       & \textit{operands:} \\
+                    &       & n     & \textit{integer literal} \\
+                    &       & \ell  & \textit{label or pointer} \\
+                    &       & r     & \textit{registers}
+            \end{array}
+            &
+            \begin{array}{lllr}
+                \iota & ::= &       & \textit{instructions:} \\
+                      &       & r_d \texttt{:=} v & \\
+                      &       & r_d \texttt{:=} r_s + v & \\
+                      &       & \texttt{if } r \texttt{jump v} v & \\
+                I   & ::=   &       & \textit{instruction sequences:} \\
+                    &       & \texttt{jump } v  & \\
+                    &       & \iota; I  &
+            \end{array}
+        \end{array}
+    \end{equation*}
+    \caption{instructions and operands for the \talz language}
+    \label{eq:tal0-ops}
+\end{figure}
+
+By figure \ref{eq:tal0-ops}, the previous code snippet would look like
+\begin{lstlisting}
+jump:
+    jump        r1
+\end{lstlisting}
+
+
+\subsubsection{The abstract machine}
+The abstract machine presented here is in accordance to Morrissets TAL-0. The
+machine presented here will be extended in future sections.
+
+\subsubsection{Typing rules}
+
+$ftv(\tau)$ is the set of free variables for $\tau$. Not sure where it looks to
+determine free-ness? a variable $x$ is bound in $\tau$ if $\forall x.\tau$, but
+i think this may be a writing mistake? Surely it should be like $ftv(\forall
+x.y) = \{ y \}$ while $ftv(\forall x.x) = \{ \emptyset \}$
+
+\subsubsection{Soundness}
+
+The proof relies on the abstract machine not getting stuck.
 
 
 
-
+\section{worst-case execution time analysis}
 
 
 % % Typed assembly language (TAL) provides types to to memory and registers through
