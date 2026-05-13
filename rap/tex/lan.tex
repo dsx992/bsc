@@ -9,6 +9,7 @@ constraint satisfaction of predicate logic, far out of the scope of this
 project, unfortunately.
 
 \subsection{Strays from risc-v}
+
 As with the TALs introduced above, there is little reason to distinguish
 between immediate instructions and register instructions, meaning that \subi
 and \sub can be treated the same. This is due to the value type that they all
@@ -26,17 +27,21 @@ since the value field will either be an immediate value or a register.
 This section describes how the array and stack types work with each other.
 From the syntax we have
 
-\begin{equation*}
-    \begin{array}{llcl}
-        \text{region memory types variables} & \mu & & \\
-        \text{region memory types}      & M     & ::= & scratch \mid shared \mid \mu \\
-        \text{stack types variables}    & \rho  & & \\
-        \text{stack types}              & S     & ::= & [] \mid \rho \mid \tau :: S \\
-        \text{types}                    & \tau  & ::= & .. \mid
-                                                        \tau\ array(x)
-                                                        \\
-    \end{array}
-\end{equation*}
+\begin{figure}
+    \begin{equation*}
+        \begin{array}{llcl}
+            \text{region memory types variables} & \mu & & \\
+            \text{region memory types}      & M     & ::= & scratch \mid shared \mid \mu \\
+            \text{stack types variables}    & \rho  & & \\
+            \text{stack types}              & S     & ::= & [] \mid \rho \mid \tau :: S \\
+            \text{types}                    & \tau  & ::= & .. \mid
+                                                            \tau\ array(x)
+                                                            \\
+        \end{array}
+    \end{equation*}
+    \caption{Syntax for lifting types into region memory}
+    \label{syn:region-lifted}
+\end{figure}
 
 Stack types can be instantiated with
 
@@ -100,6 +105,10 @@ therefore the typing rules would not work.
         size_t               allocated;
     };
 \end{lstlisting}
+
+\subsubsection{Unitialized values} Since the stack \incr instruction
+essentially creates garbage values, we may want to type it, and introduce a
+notion of instantiated and uninstantiated types\cite{stal}.
 
 Essentially, the regions type --- while in C is just a pointer --- is a
 lifted stack type containing the whole region.
@@ -165,9 +174,15 @@ They may be best explained through their code generation, shown in figure \ref{f
     \label{fig:incr-codegen}
 \end{figure}
 
-\subsection{Abstract machine}
 
-Unlike other TAL abstract machines, I am omitting the stack, since it will be used as a normal register (\var{sp}).
+\subsection{Types}
+    As discussed, we want to lift types into memory regions as in figure
+    \ref{syn:region-lifted}.
+    The evaluation will be as in TAL-0
+
+\subsection{Abstract machine}
+    Unlike other TAL abstract machines, I am omitting the stack, since it will
+    be used as a normal register (\var{sp}).
 
 \subsection{Dependent types}
 
@@ -205,9 +220,55 @@ index expressions.
 this reduces stack type rules to
 \begin{equation*}
     \infer[(\sub)]
-    {\Phi;\ \Delta;\ }
+    {\Phi;\ \Delta;\ R \vdash \sub\ r_d,\ r_s,\ v}
     {}
 \end{equation*}
 
 
 \subsection{Coercion}
+
+\subsection{Syntax}
+\begin{figure}
+    \begin{equation*}
+        \begin{array}{llcl}
+            \text{type variables}           & \alpha \\
+            \text{region memory types variables} & \mu \\
+            \text{region memory types}      & M     & ::= & scratch \mid shared \mid \mu \\
+            \text{stack types variables}    & \rho  & & \\
+            \text{stack types}              & S     & ::= & [] \mid \rho \mid \tau :: S \\
+            \text{Collection types}         & C     & ::= & M\ \tau\ array(x)
+                                                        \mid M\ S
+                                                        \\
+            \text{types}                    & \tau  & ::= & \alpha
+                                                        \mid top
+                                                        \mid int
+                                                        \mid C
+                                                        \\
+            \text{type variable contexts}   & \Delta & ::= & \cdot_\mathrm{tv} 
+                                                        \mid \Delta, \mu 
+                                                        \mid \Delta, \rho 
+                                                        \mid \Delta, \alpha
+                                                        \\
+        \end{array}
+    \end{equation*}
+    \caption{Syntax for a typed assembly language}
+    \label{syn:my-tal}
+\end{figure}
+
+An example program could look like figure \ref
+
+\begin{figure}
+    \begin{lstlisting}[gobble=8]
+        start:  [a0: int, a1: int, a2: int, a3: int]
+                subi    sp, sp, 16      ; sp: scratch top :: top :: top :: top :: 'r
+                mv      a4, sp
+        coerce: ('m)
+                [a0: int, a1: int, a2: int, a3: int, a4: 'm int array(4)]
+                lw      a0, 0(a4)       ; a4: scratch int :: ..
+                lw      a1, 4(a4)       ; a4: scratch int :: int :: ..
+                lw      a2, 8(a4)       ; a4: scratch int :: int :: int ..
+                lw      a3, 12(a4)      ; a4: scratch int :: int :: int :: int :: 'r
+    \end{lstlisting}
+    \caption{Example program}
+    \caption{code:mtal}
+\end{figure}
