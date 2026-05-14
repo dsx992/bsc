@@ -7,9 +7,54 @@ even smaller part implemented.
 The \say{full} language requires much too complex typing that involves
 constraint satisfaction of predicate logic, far out of the scope of this
 project, unfortunately.
+\say{The language} refers to the implementation TAL designed for WCET.
+
+\begin{figure}
+    \begin{equation*}
+        \begin{array}{llcl}
+            \text{type variables}           & \alpha \\
+            \text{region memory types variables} & \mu \\
+            \text{region memory types}      & M     & ::= & scratch \mid shared \mid \mu \\
+            \text{stack types variables}    & \rho  & & \\
+            \text{stack types}              & S     & ::= & [] \mid \rho \mid \tau :: S \\
+            \text{Collection types}         & C     & ::= & M\ \tau\ array(i)
+                                                        \mid M\ S
+                                                        \\
+            \text{types}                    & \tau  & ::= & \alpha
+                                                        \mid \ttop
+                                                        \mid int
+                                                        \mid C
+                                                        \\
+            \text{type variable contexts}   & \Delta & ::= & \cdot_\mathrm{tv} 
+                                                        \mid \Delta, \mu 
+                                                        \mid \Delta, \rho 
+                                                        \mid \Delta, \alpha
+                                                        \\
+            \text{constants}                & c     & ::= & i \mid l \\
+            \text{labels}                   & l \\
+            \text{instructions}     & ins   & ::= & aop\ r_d,\ r_s,\ v \\
+                                    % &       & \mid& bop\ r,\ v \\
+                                    &       & \mid& \incr\ r_d,\ r_s,\ v \\
+                                    &       & \mid& \decr\ r_d,\ r_s,\ v \\
+                                    &       & \mid& \mv\ r_d,\ r_s \\
+            \text{arithmetic operations}    & aop   & ::= & \add \mid \sub 
+                                                \mid \mul \mid \ddiv \\
+            \text{instruction sequences}    & I     & ::= & 
+                                                    % \jump\ v
+                                                    % \mid 
+                                                    \halt
+                                                    \mid 
+                                                    ins;\ I
+                                                    \\
+            \text{Blocks}                   & B     & ::= & \lambda \Delta.(R, I)
+            % \text{index expressions}        & x     & ::= & i \\
+        \end{array}
+    \end{equation*}
+    \caption{Syntax for a typed assembly language}
+    \label{syn:my-tal}
+\end{figure}
 
 \subsection{Strays from risc-v}
-
 As with the TALs introduced above, there is little reason to distinguish
 between immediate instructions and register instructions, meaning that \subi
 and \sub can be treated the same. This is due to the value type that they all
@@ -22,44 +67,178 @@ share in some form, defined in some way as
 For code generation, these will have to be reintroduced, but this is trivial,
 since the value field will either be an immediate value or a register.
 
-\subsection{Stacks and arrays}
+Since all types are word sized, we replace the load and store instructions with
+$\load\ r_d,\ imm(r_s)$ and $\store\ r_s,\ imm(r_d)$
 
-This section describes how the array and stack types work with each other.
-From the syntax we have
+\subsection{Types}
+While the syntax of the language is inspired by DTAL, it is much simplified (or
+mangled, even).
+This is also the case of the $\tau$ types, where only $a$, \ttop, and $int$
+remain. The array and stack types are still present but wrapped, but
+collections will be explained later.
+Universally quantified types, i.e. type variables are still present, although
+they do not serve a concrete function. Stack type variables are still present.
+They are needed to append to a stack, which is needed for \incr.
+Specific for the language, region memory type variables have been introduced.
+They allow labels to be polymorphic over regions. This is an ergonomic must, as
+otherwise the programmer (or a compiler) would have to write labels for both
+\scratch and \shared.
+
+For the register file, this also means that any type that is not explicitly
+typed defaults to \ttop. This means that for later blocks, \ttop can freely be
+coerced into a new type.
+
+
+\subsection{Collections}
+This section describes how the array and stack types work with each other, and
+how they are to be thought of conceptually in the language moving forwards.
+Some TALs introduce \malloc or similar pseudo-instructions to introduce a
+notion of types to arrays. Since assembly does not in of itself contain arrays,
+but only pointers, some level of abstraction needs to be introduced for a type
+system to be able to type arrays and differentiate them from garbage and labels.
+In \texttt{C}, heap arrays are pointers, and pointer arithmetic is allowed.
+Labels can only be used in \texttt{goto} statements, and not even arithmetic is
+permitted on them. Still, it is not trivial whether \lstinline{float* n} points
+to a scalar, or is an array.
+
+\begin{figure}
+    \begin{lstlisting}[language=C, gobble=8]
+        unsigned int *simple_malloc(struct arena_allocator *alloc, size_t size)
+        {
+            unsigned int* start = alloc->region.start + alloc->allocated;
+            alloc->allocated += size;
+            return start;
+        }
+    \end{lstlisting}
+    \caption{A simple allocation function}
+    \label{code:simple-alloc}
+\end{figure}
+A \malloc instruction is not suited in this case, since the target system
+contains multiple allocators (as discussed in section TODO: REF HERE, THE
+SYSTEM) working over memory regions.
+The problem then evolves into the question of how to design a type system that
+makes an allocator implicitly emit an array type, or a type that can be coerced
+into arrays.
+A simple allocator is shown in figure \ref{code:simple-alloc}. It has no safety
+checks, and it does not align allocated memory.
+The TAL type systems often only accept word sized types, and for simplicity, so
+will I.
+To answer this, we first look into stacks, arrays, and a type system.
+Another issue is the fact that the stack pointer grows downwards, while the
+arena stacks grow upwards. This will also be solved.
+
+\subsubsection{Stacks}
+
+Stack types can be defined recursively as
+\begin{equation*}
+    \begin{array}{llcl}
+        \text{stack types variables}    & \rho  & & \\
+        \text{stack types}              & S     & ::= & [] \mid \rho \mid \tau :: S \\
+    \end{array}
+\end{equation*}\cite{xi-dtal}
+
+In DTAL, the stack type is a part of the type state $\Sigma$, and is modified
+through \texttt{pushd} and \texttt{pop} operations, a very conventional way to
+use the stack.
+Here, stacks are used not only for the call-stack, but general allocations, and
+to be coerced into array types.
+To communicate to the type system that we intend to modify a stack, we
+introduce two instructions \incr and \decr. They may be described through the
+code generation in \ref{fig:incr-codegen}. \incr decreases the stack pointer in
+$r_s$ by $v$ words (removing the need for runtime alignment) and places the
+value in $r_d$ whose types will be that of $r_s$ with $v$ \ttop values
+appended to it, e.g.,
+\begin{lstlisting}[gobble=4]
+    main:   ('r)
+            [sp: 'r]
+            incr    a0, sp, 4   ; a0 : top :: top :: top :: top :: 'r
+\end{lstlisting}
+where \lstinline{'r} is a stack type variable.
+\decr functions as expected, popping $v$ words off the stack.
+
+A programmer may not be interested in passing on \emph{the whole} stack after
+increasing the word count, such as stack arrays in C. If the type of a stack
+allocated array was the whole call-stack, not only would it obfuscate the
+intend, it would prevent memory safety (if the type system enforced such
+things).
+It is therefore desirable to \say{cut down} or slice a stack. This can be done
+by considering a stack $S$ a subtype of a stack $S'$ if $S$ is contained within
+$S'$ with a possibly empty tail. Or formally
+\begin{equation*}
+    \tau_0 \cons \cdots \cons \tau_n
+    \leq
+    \tau_0 \cons \cdots \cons \tau_m
+    \mid
+    n \leq m
+\end{equation*}
+
+To illustrate the usefulness, we can expand on the previous code snippet:
+\begin{lstlisting}
+    main:   ('r)
+            [sp: 'r]
+            incr    a0, sp, 4   ; a0 : top :: top :: top :: top :: 'r
+    subtype:
+            [a0: top :: top :: top :: top]
+            ..
+\end{lstlisting}
+
+While \ttop is not so useful in of itself since it practically refers to
+garbage values, we will later introduce a subtyping rule to \ttop, specifically
+such that any type can be coerced from \ttop.
+This makes it possible to instantiate a stack of any type (although the
+language may not support so many types) without introducing special \say{typed}
+syntax to \incr and \decr, as DTALs $newarray[\tau]$.
+So really we could write:
+\begin{lstlisting}
+    main:   ('r)
+            [sp: 'r]
+            incr    a0, sp, 4   ; a0 : top :: top :: top :: top :: 'r
+    subtype:('a)
+            [a0: 'a :: 'a :: 'a :: 'a]
+            ..
+\end{lstlisting}
+for some type variable \var{'a}.
+
+\subsubsection{Arrays}
+Since we have foregone array initialization instructions, we add the choice to
+coerce a stack containing only one type to an array of that type. This models C
+stack arrays quite well.
+
+
+\subsubsection{Array allocation using stacks}
+At this point we can subtype stacks to create smaller stacks, and we can
+instantiate array types by coercing a stack.
+
+
+While the call-stack grows downwards and \incr and \decr can be used as
+expected, the memory region allocations grows upwards.
+The solution lies in the conceptualization.
+
+While \incr and \decr only work on immediate values here, this is only for
+simplification, and since the language contains no looping constructs, there is
+no value in having dependent sizes.
+% This creates a problem
+% This immediately creates a problem, since only the risc-v stack grows
+% downwards, and the region stacks (of which allocations happen to). However,
+% there is a solution in the conceptualization of these stacks.
 
 \begin{figure}
     \begin{equation*}
         \begin{array}{llcl}
-            \text{region memory types variables} & \mu & & \\
+            \text{region memory types variables} & \mu \\
             \text{region memory types}      & M     & ::= & scratch \mid shared \mid \mu \\
             \text{stack types variables}    & \rho  & & \\
             \text{stack types}              & S     & ::= & [] \mid \rho \mid \tau :: S \\
-            \text{types}                    & \tau  & ::= & .. \mid
-                                                            \tau\ array(x)
-                                                            \\
+            \text{Collection types}         & C     & ::= & M\ \tau\ array(x)
+                                                        \mid M\ S
+                                                        \\
+            \text{types}                    & \tau  & ::= & \cdots \mid C
+                                                        \\
         \end{array}
     \end{equation*}
-    \caption{Syntax for lifting types into region memory}
+    \caption{Syntax for lifting collection types into region memory}
     \label{syn:region-lifted}
 \end{figure}
-
-Stack types can be instantiated with
-
-\begin{equation*}
-    \infer[(::)]
-    { \Phi; \Delta; (R, S) \vdash \subi\ r_d, r_s, imm; I}
-    { \Phi; \Delta; (R, S) \vdash r_s : \rho 
-    & imm / 4 = n
-    & n > 0
-    & \Phi; \Delta; (R[r_d : top_0 :: \cdots :: top_n :: \rho], S) \vdash 
-    }
-\end{equation*}
-
-This of course lacks some expressiveness, since rarely is an extended 
-
-this immediately creates a problem, since only the risc-v stack grows
-downwards, and the region stacks (of which allocations happen to). However,
-there is a solution in the conceptualization of these stacks.
 
 An example program that stores some values on the stack would look like the
 following
@@ -105,6 +284,24 @@ therefore the typing rules would not work.
         size_t               allocated;
     };
 \end{lstlisting}
+
+% \subsubsection{Limitations}
+% While the method described above works well for the allocators, it permits some
+% dangerous actions.
+% Take the following code:
+% \begin{lstlisting}[gobble=4]
+%     copy:   ('m)
+%             [a0: 'm int :: int :: int :: int]
+%             mv      a1, a0
+%     coerce: ('m)
+%             [a0: 'm int :: int :: int :: int, a1: 'm int :: int]
+%     arrays: ('m)
+%             [a0: 'm int array(4), 'm int array(2)]
+% \end{lstlisting}
+% \lstinline{coerce} and \lstinline{arrays} may 
+
+
+While the purpose of the language is only typed memory regions, 
 
 \subsubsection{Unitialized values} Since the stack \incr instruction
 essentially creates garbage values, we may want to type it, and introduce a
@@ -175,14 +372,24 @@ They may be best explained through their code generation, shown in figure \ref{f
 \end{figure}
 
 
-\subsection{Types}
-    As discussed, we want to lift types into memory regions as in figure
-    \ref{syn:region-lifted}.
-    The evaluation will be as in TAL-0
 
 \subsection{Abstract machine}
     Unlike other TAL abstract machines, I am omitting the stack, since it will
     be used as a normal register (\var{sp}).
+    The DTAL abstract machine has a machine state $\mathcal M$ $(\mathcal H,
+    \mathcal R, \mathcal S)$ being a triple over a heap, register file, and
+    stack.
+    Since the system the language is targeted at is stack based, no heap is
+    needed (except for program text, but this is omitted partially due to
+    program scope) and no explicit stack is needed, since the register \var{sp}
+    will be used.
+    A such, the abstract machine contains only a finite mapping
+    between registers and values.
+
+    This is also the motivation behind removing the DTAL type state $\Sigma$
+    and state type $\sigma$.
+
+\subsection{Dynamic Semantics}
 
 \subsection{Dependent types}
 
@@ -225,37 +432,16 @@ this reduces stack type rules to
 \end{equation*}
 
 
+\subsection{Dynamic Semantics}
+
 \subsection{Coercion}
 
 \subsection{Syntax}
-\begin{figure}
-    \begin{equation*}
-        \begin{array}{llcl}
-            \text{type variables}           & \alpha \\
-            \text{region memory types variables} & \mu \\
-            \text{region memory types}      & M     & ::= & scratch \mid shared \mid \mu \\
-            \text{stack types variables}    & \rho  & & \\
-            \text{stack types}              & S     & ::= & [] \mid \rho \mid \tau :: S \\
-            \text{Collection types}         & C     & ::= & M\ \tau\ array(x)
-                                                        \mid M\ S
-                                                        \\
-            \text{types}                    & \tau  & ::= & \alpha
-                                                        \mid top
-                                                        \mid int
-                                                        \mid C
-                                                        \\
-            \text{type variable contexts}   & \Delta & ::= & \cdot_\mathrm{tv} 
-                                                        \mid \Delta, \mu 
-                                                        \mid \Delta, \rho 
-                                                        \mid \Delta, \alpha
-                                                        \\
-        \end{array}
-    \end{equation*}
-    \caption{Syntax for a typed assembly language}
-    \label{syn:my-tal}
-\end{figure}
+The syntax for the language is described in figure \ref{syn:my-tal}, which
+takes inspiration from DTAL\cite{xi-dtal}.
+As have been discussed, in a complete language with control-flow, type variables should be reintroduced into index expressions.
 
-An example program could look like figure \ref
+An example program could look like figure \ref{code:mtal}
 
 \begin{figure}
     \begin{lstlisting}[gobble=8]
@@ -270,5 +456,5 @@ An example program could look like figure \ref
                 lw      a3, 12(a4)      ; a4: scratch int :: int :: int :: int :: 'r
     \end{lstlisting}
     \caption{Example program}
-    \caption{code:mtal}
+    \label{code:mtal}
 \end{figure}

@@ -1,1 +1,57 @@
-\section{ssd os}
+\section{\ssdos (The system)}
+
+We are not really considering a heap at all (even though obviously program text
+exists, and \var{.words} can exist there, too).
+
+\subsection{Model}
+This project specifically targets the cacheless \texttt{v80}
+platform\cite{sigma}. It consists of four clusters with four AMD MicroBlaze V
+processors, each having its own scratchpad memory, and all clusters connected
+to a shared scratchpad, referred to as shared moving forwards.
+The key take-away is that shared memory is slower than scratch memory.
+
+\subsection{Allocating}
+
+\begin{figure}
+    \begin{lstlisting}[language=C, gobble=4]
+        struct memory_region
+        {
+            uint8_t *start;
+            size_t   size;
+        };
+
+        struct arena_allocator
+        {
+            struct memory_region region;
+            size_t               allocated;
+        };
+    \end{lstlisting}
+    \caption{Structure of an allocator}
+    \label{code:arena}
+\end{figure}
+
+\begin{figure}
+    \begin{lstlisting}[language=C, gobble=8]
+        uint8_t *arena_alloc(struct arena_allocator *alloc, size_t size, size_t alignment)
+        {
+            uint8_t     *free_region_start = alloc->region.start + alloc->allocated;
+            const size_t alignment_padding =
+                    (alignment - (((size_t) free_region_start) % alignment)) %
+                    alignment;
+            const size_t size_to_alloc = size + alignment_padding;
+
+            const size_t remaining =
+                    (alloc->region.start + alloc->region.size) - free_region_start;
+
+            if (remaining < size_to_alloc)
+                return NULL;
+
+            uint8_t *allocated = free_region_start + alignment_padding;
+            alloc->allocated += size_to_alloc;
+            return allocated;
+        }
+    \end{lstlisting}
+    \caption{Example of an allocator function}
+    \label{code:alloc}
+\end{figure}
+
