@@ -8,11 +8,22 @@ The \say{full} language requires much too complex typing that involves
 constraint satisfaction of predicate logic, far out of the scope of this
 project, unfortunately.
 \say{The language} refers to the implementation TAL designed for WCET.
+The language syntax is pictured in figure \ref{syn:my-tal}.
+All registers map to $\tau$, except when otherwise noted. The register names
+follow the risc-v ABI names\cite{cod}.
+If a register is not explicitly typed, it will default to \ttop.
+The jump instruction \jump is kept only to link blocks together, mimicking assembly fall-through.
 
 \begin{figure}
     \begin{equation*}
         \begin{array}{llcl}
             \text{type variables}           & \alpha \\
+            \text{Register files}   & R     & ::= & [
+                                                        \texttt{zero} : int,
+                                                        \texttt{ra} : \tau_1,
+                                                        \texttt{sp} : S,
+                                                        \cdots
+                                                    ] \\
             \text{region memory types variables} & \mu \\
             \text{region memory types}      & M     & ::= & scratch \mid shared \mid \mu \\
             \text{stack types variables}    & \rho  & & \\
@@ -40,17 +51,18 @@ project, unfortunately.
             \text{arithmetic operations}    & aop   & ::= & \add \mid \sub 
                                                 \mid \mul \mid \ddiv \\
             \text{instruction sequences}    & I     & ::= & 
-                                                    % \jump\ v
-                                                    % \mid 
+                                                    \jump\ v
+                                                    \mid 
                                                     \halt
                                                     \mid 
                                                     ins;\ I
                                                     \\
-            \text{Blocks}                   & B     & ::= & \lambda \Delta.(R, I)
+            \text{Blocks}           & B & ::= & \lambda \Delta.(R, I) \\
+            \text{Programs}         & P & ::= & l_1: B_1; \cdots ; l_n : B_n \\
             % \text{index expressions}        & x     & ::= & i \\
         \end{array}
     \end{equation*}
-    \caption{Syntax for a typed assembly language}
+    \caption{Syntax for a typed assembly language.}
     \label{syn:my-tal}
 \end{figure}
 
@@ -222,37 +234,83 @@ no value in having dependent sizes.
 % downwards, and the region stacks (of which allocations happen to). However,
 % there is a solution in the conceptualization of these stacks.
 
+An example program that allocates a stack array and stores four integers could
+look like the program in figure \ref{code:ex-prog}.
 \begin{figure}
-    \begin{equation*}
-        \begin{array}{llcl}
-            \text{region memory types variables} & \mu \\
-            \text{region memory types}      & M     & ::= & scratch \mid shared \mid \mu \\
-            \text{stack types variables}    & \rho  & & \\
-            \text{stack types}              & S     & ::= & [] \mid \rho \mid \tau :: S \\
-            \text{Collection types}         & C     & ::= & M\ \tau\ array(x)
-                                                        \mid M\ S
-                                                        \\
-            \text{types}                    & \tau  & ::= & \cdots \mid C
-                                                        \\
-        \end{array}
-    \end{equation*}
-    \caption{Syntax for lifting collection types into region memory}
-    \label{syn:region-lifted}
+    \begin{lstlisting}[gobble=8]
+        start:  [a0: int, a1: int, a2: int, a3: int]
+        alloc:  [a0: int, a1: int, a2: int, a3: int]
+                incr    a4, sp, 4       ; a4: top :: top :: top :: top :: ..
+        store:  ('m)
+                [a0: int, a1: int, a2: int, a3: int, a4: 'm int array(4)]
+                store   a0, 0(a4)
+                store   a1, 1(a4)
+                store   a2, 2(a4)
+                store   a3, 3(a4)
+    \end{lstlisting}
+    \caption{Example code for allocating a stack array and writing to it}
+    \label{code:ex-prog}
 \end{figure}
 
-An example program that stores some values on the stack would look like the
-following
-\begin{lstlisting}[gobble=4]
-    start:  [a0: int(i), a1: int(j), a2: int(k), a3: int(l)]
-            subi    sp, sp, 16      ; sp: scratch top :: top :: top :: top :: 'r
-            mv      a4, sp
-    coerce: ('m)
-            [a0: int(i), a1: int(j), a2: int(k), a3: int(l), a4: 'm int array(4)]
-            lw      a0, 0(a4)       ; a4: scratch int(i) :: ..
-            lw      a1, 4(a4)       ; a4: scratch int(i) :: int(j) :: ..
-            lw      a2, 8(a4)       ; a4: scratch int(i) :: int(j) :: int(k) ..
-            lw      a3, 12(a4)      ; a4: scratch int(i) :: int(j) :: int(k) :: int(l) :: 'r
-\end{lstlisting}
+\begin{figure}
+    \begin{equation*}
+        \begin{array}{lcl}
+            \Delta_0    & = & \cdot_{\mathrm{tv}} \\
+            \Delta_1    & = & \var{'sp} \\
+            \Delta_2    & = & \var{'m} \\
+            R_0         & = &
+            {
+                \texttt{a0}: int,
+                \texttt{a1}: int,
+                \texttt{a2}: int,
+                \texttt{a3}: int,
+            } \\
+            R_1     & = &
+            {
+                \texttt{a0}: int,
+                \texttt{a1}: int,
+                \texttt{a2}: int,
+                \texttt{a3}: int,
+                \texttt{sp}: \var{'sp}
+            } \\
+            R_2     & = &
+            {
+                \var{a0}: int,
+                \var{a1}: int,
+                \var{a2}: int,
+                \var{a3}: int,
+                \var{a4}: \var{'m}\ int\ array(4)
+            } \\
+            I_0         & = &
+                \begin{array}[t]{llll}
+                    \jump & \var{alloc} \\
+                \end{array}
+                \\
+            I_1         & = &
+                \begin{array}[t]{llll}
+                    \incr & \var{a4}, & \var{sp}, & 4 \\
+                    \jump & \var{store}
+                \end{array}
+                \\
+            I_2         & = &
+            \begin{array}[t]{llll}
+                    \store & \var{a0}, & 0(\var{a4}) \\
+                    \store & \var{a1}, & 1(\var{a4}) \\
+                    \store & \var{a2}, & 2(\var{a4}) \\
+                    \store & \var{a3}, & 3(\var{a4}) \\
+                    \halt
+                \end{array}
+                \\
+            B_0         & = & \lambda \Delta_0.(R_0, I_0) \\
+            B_1         & = & \lambda \Delta_1.(R_1, I_1) \\
+            B_2         & = & \lambda \Delta_2.(R_2, I_2) \\
+            P           & = & \var{start}: B_0;\ \var{alloc}: B_1;\ \var{store}: B_2 \\
+        \end{array}
+    \end{equation*}
+    \caption{Explanation of code in figure \ref{code:ex-prog}}
+\end{figure}
+
+
 % \textit{dependent types are not making it into the implementation, and all arrays will be statically sized}
 \cons is right associative, so $\texttt{scratch top :: top ..} =
 \texttt{scratch} (\texttt{top :: top ..})$
