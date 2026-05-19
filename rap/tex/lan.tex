@@ -12,12 +12,16 @@ The language syntax is pictured in figure \ref{syn:my-tal}.
 All registers map to $\tau$, except when otherwise noted. The register names
 follow the risc-v ABI names\cite{cod}.
 If a register is not explicitly typed, it will default to \ttop.
-The jump instruction \jump is kept only to link blocks together, mimicking assembly fall-through.
+The jump instruction \jump is kept only to link blocks together, mimicking
+assembly fall-through.
+
+Maybe it should be called novel TAL or NTAL lol.
 
 \begin{figure}
     \begin{equation*}
         \begin{array}{llcl}
             \text{type variables}           & \alpha \\
+            \text{State type}       & \sigma & ::= & \lambda \Delta.R \\
             \text{Register files}   & R     & ::= & [
                                                         \texttt{zero} : int,
                                                         \texttt{ra} : \tau_1,
@@ -34,6 +38,7 @@ The jump instruction \jump is kept only to link blocks together, mimicking assem
             \text{types}                    & \tau  & ::= & \alpha
                                                         \mid \ttop
                                                         \mid int
+                                                        \mid int(i)
                                                         \mid C
                                                         \\
             \text{type variable contexts}   & \Delta & ::= & \cdot_\mathrm{tv} 
@@ -41,13 +46,17 @@ The jump instruction \jump is kept only to link blocks together, mimicking assem
                                                         \mid \Delta, \rho 
                                                         \mid \Delta, \alpha
                                                         \\
+            \text{integer literals}         & i \\
             \text{constants}                & c     & ::= & i \mid l \\
+            \text{values}                   & v     & ::= & c \mid r \mid C \\
             \text{labels}                   & l \\
             \text{instructions}     & ins   & ::= & aop\ r_d,\ r_s,\ v \\
                                     % &       & \mid& bop\ r,\ v \\
                                     &       & \mid& \incr\ r_d,\ r_s,\ v \\
                                     &       & \mid& \decr\ r_d,\ r_s,\ v \\
                                     &       & \mid& \mv\ r_d,\ r_s \\
+                                    &       & \mid& \mvscratch\ r_d \\
+                                    &       & \mid& \mvshared\ r_d \\
             \text{arithmetic operations}    & aop   & ::= & \add \mid \sub 
                                                 \mid \mul \mid \ddiv \\
             \text{instruction sequences}    & I     & ::= & 
@@ -82,6 +91,23 @@ since the value field will either be an immediate value or a register.
 Since all types are word sized, we replace the load and store instructions with
 $\load\ r_d,\ imm(r_s)$ and $\store\ r_s,\ imm(r_d)$
 
+% The \mv instruction also differs here, because it also works as a complete load
+% immediate instruction.
+% The code gen will depend on whether $v$ is a value or a register.
+% Code generation in the case of register is as expected.
+% If it is a value, then it expands to the \var{lui} + \var{addi} construct.
+Two very specific instructions are also added: \mvscratch and \mvshared. They
+serve a very specific purpose in moving the start address of either the
+\scratch or \shared memory regions into register $r_d$.
+Initially I did not want to stray from risc-v, so using a combination of
+\var{lui} and \var{addi}, however that would create an incomplete type between
+the two instructions.
+For a while, the second operand of \mv could be a value type $v$, which would
+then be translated to \var{lui} and \var{addi} if the type of $v$ called for it.
+But still, magic values for the memory region pointers were needed.
+This is the problem \mvscratch and \mvshared attempt to solve, however ugly it
+may be.
+
 \subsection{Types}
 While the syntax of the language is inspired by DTAL, it is much simplified (or
 mangled, even).
@@ -99,6 +125,15 @@ otherwise the programmer (or a compiler) would have to write labels for both
 For the register file, this also means that any type that is not explicitly
 typed defaults to \ttop. This means that for later blocks, \ttop can freely be
 coerced into a new type.
+
+The dependent type $int(x)$ where $x$ is an index expression has been
+reintroduced as $int(i)$ to allow static evaluation of stack types in \incr and
+\decr.
+The instructions need to add the right amount of types to the head of the
+stack.
+It follows that they should only allow immediate values.
+This is reflected in their evaluation rules and typing rules in figure
+\ref{fig:eval-rules} and figure \ref{fig:typing-rules-values}, respectively.
 
 
 \subsection{Collections}
@@ -310,21 +345,6 @@ look like the program in figure \ref{code:ex-prog}.
     \caption{Explanation of code in figure \ref{code:ex-prog}}
 \end{figure}
 
-
-% \textit{dependent types are not making it into the implementation, and all arrays will be statically sized}
-\cons is right associative, so $\texttt{scratch top :: top ..} =
-\texttt{scratch} (\texttt{top :: top ..})$
-
-\ttop can be coerced into any type, and is used to initialize the array.
-
-A stack $[\tau_0 \cons \cdots \cons \tau_n]$ can be coerced into an array
-$\tau\ array(\var m)$ iff $m < n$ and $\tau = tau_i$ for all $0 \leq i < m$
-
-\var{'m} is a type variable that will be unified to type \scratch.
-
-Since the stack pointer points to the stack, and the target is a specific ssd
-os system (link) the type of \var{sp} will always be $\scratch \mathrm S$.
-
 Another use is working with the arena allocators. They are simple, and also
 work like a stack, but these grow upwards, which is opposite the call stack and
 therefore the typing rules would not work.
@@ -380,6 +400,360 @@ we want to constrain the syntax to only allow word-size operations.
 Only stacks can change size (through arithmetic operations on a stack pointer)
 so it suffices to introduce instructions \incr and \decr.
 They may be best explained through their code generation, shown in figure \ref{fig:incr-codegen}
+
+
+\subsection{Abstract machine}
+    Unlike other TAL abstract machines, I am omitting the stack, since it will
+    be used as a normal register (\var{sp}).
+    The DTAL abstract machine has a machine state $\mathcal M$ $(\mathcal H,
+    \mathcal R, \mathcal S)$ being a triple over a heap, register file, and
+    stack.
+    Since the system the language is targeted at is stack based, no heap is
+    needed (except for program text, but this is omitted partially due to
+    program scope) and no explicit stack is needed, since the register \var{sp}
+    will be used.
+    A such, the abstract machine contains only a finite mapping
+    between registers and values.
+
+    This is also the motivation behind removing the DTAL type state $\Sigma$
+    and state type $\sigma$.
+
+\subsection{Dynamic Semantics}
+Dynamic semantics is needed to evaluate the types throughout block execution
+for reasons discussed in section (TODO: REF IDEAS -- WHY NOT TRANSITIONS).
+
+Since we are explicit in the use of \var{sp} the abstract machine does not need
+to keep track of this.
+The heap is also omitted. We instead refer to hardcoded values: the start of
+each memory region.
+This means that
+\begin{lstlisting}
+    start:
+            mv      a0, SCRATCH_START
+\end{lstlisting}
+will set the type of \var{a0} in the register file to $\scratch S$, where
+\var{SCRATCH\_START} refers to an immediate value that points to the start of
+the scratch region.
+An abstract machine state $\mathcal M$ naturally reduces to just the register
+file.
+We define $\mathcal M = \mathcal R$ where $\mathcal R(r)$ is a constant.
+
+Similar to the treatment in DTAL, we introduce an instruction sequence $J_P$ of
+a program $P$, and $I_B$ for the instruction sequence in $B$ as
+\begin{equation*}
+    J_P = {l_1; I_{B_1}; \cdots \ ; l_n; I_{B_n}}
+\end{equation*}
+We use $J_P(i)$ to refer to the $i$th instruction or label in $J_P$. If it is
+clear what $P$ is being referred to, we may omit the subscript.
+We also use $J_P^{-1}(l) = i \iff J_P(i) = l$ from DTAL.
+
+A $P$-snapshot\cite{xi-dtal} is either \halt or a tuple $(ic, \mathcal M)$ such
+that $0 \leq ic < length(J_P)$, where $ic$ is the instruction counter.
+$(ic, \mathcal M) \rightarrow_P (ic', \mathcal M')$ means that the machine
+state $\mathcal M$ transforms into $\mathcal M'$ by executing the instruction
+at $J_P(ic)$. Similarly $ic'$ is incremented or replaced in the case of \jump.
+
+\begin{equation*}
+    \mathcal M(v) =
+    \left\{
+        \begin{array}{ll}
+            i               & \text{if $v$ is integer $i$} \\
+            l               & \text{if $v$ is label $l$} \\
+            C               & \text{if $v$ is collection $C$} \\
+            \mathcal R(r)   & \text{if $v$ is register $r$}
+        \end{array}
+    \right.
+\end{equation*}
+Similar to DTAL.
+
+\begin{figure}
+    \begin{equation*}
+        \begin{array}{c}
+        \infer[(\text{eval-add})]
+            {(ic, \mathcal R) \rightarrow_P (ic + 1, \mathcal R[r_d = i + j])}
+            {J(ic) = \add\ r_d, r_s, v & \mathcal M(r_s) = i & \mathcal M(v) = j}
+        \\
+        \infer[(\text{eval-incr})]
+            {(ic, \mathcal R) 
+            \rightarrow_P
+            (ic + 1,\mathcal R[r_d = \mu\ \ttop_0 \cons \cdots \cons \ttop_i \cons S])}
+            {J(ic) = \incr\ r_d,\ r_s,\ v &
+                \mathcal M(r_s) = \mu\ S &
+                \mathcal M(v) = i &
+                i > 0
+            }
+        \\
+        \infer[(\text{eval-decr})]
+            {(ic, \mathcal R) 
+            \rightarrow_P
+            (ic + 1,\mathcal R[r_d = \mu\ S])}
+            {J(ic) = \incr\ r_d,\ r_s,\ v &
+                \mathcal M(r_s) = \mu\ \ttop_0 \cons \cdots \cons \ttop_i \cons S &
+                \mathcal M(v) = i &
+                i > 0
+            }
+        \end{array}
+    \end{equation*}
+    \caption{Evaluation rules}
+    \label{fig:eval-rules}
+\end{figure}
+
+\subsection{Static Semantics}
+The typing rules for the language is the most important step in the solution of
+calculating worst-case execution time with the method discussed.
+
+One difference between other TALs and especially how values $v$ in DTAL and how
+they behave here, is that we need a way to instantiate the region memory types.
+Earlier instantiating was presented as 
+
+In figure \ref{fig:typing-rules} presenting the typing rules, $\rho_{scratch}$
+and $\rho_{shared}$ represent two stack types.
+Each region should be defaulted to \ttop, and the amount depends on the
+physical size. Since the scratchpad is 128KB\cite{sigma}, $\rho_{scratch}$ may
+be defined as $\ttop_1 \cons \cdots \cons \ttop_{128 / w \cdot 1000} \cons
+\emptystack$ where $w$ is the machines wordsize.
+
+\begin{figure}
+    \begin{equation*}
+        \begin{array}{c}
+            \infer[(\text{type-int})]
+                {\Delta; R \vdash i : int(i)}
+                {}
+            \\
+            \infer[(\text{type-stack})]
+                {\Delta; R \vdash \mu\  S : }
+                {}
+        \end{array}
+    \end{equation*}
+    \caption{Typing rules for values}
+    \label{fig:typing-rules-values}
+\end{figure}
+
+\begin{figure}
+    \begin{equation*}
+        \begin{array}{c}
+            \infer[(\text{type-add})]
+                {\Delta; R \vdash \add\ r_d, r_s, v; I}
+                {\Delta; R \vdash r_s : int &
+                \Delta; R \vdash v : int &
+                \Delta; R \vdash I}
+            \\
+            \infer[(\text{type-incr})]
+                {\Delta; R \vdash \incr\ r_d, r_s, v; I}
+                {\Delta; R \vdash r_s : \mu\ S &
+                \Delta; R \vdash v : int(i) &
+                i > 0 &
+                \Delta;
+                R[r_d = \mu\ \ttop_1 \cons \cdots \cons \ttop_i \cons S]
+                \vdash I}
+            \\
+            \infer[(\text{type-decr})]
+                {\Delta; R \vdash \decr\ r_d, r_s, v; I}
+                {\Delta;
+                    R \vdash r_s :
+                    \mu\ \tau_1 \cons \cdots \cons \tau_i \cons S &
+                \Delta; R \vdash v : int(i) &
+                i > 0 &
+                \Delta; R[r_d = \mu\ S] \vdash I}
+            \\
+            \infer[(\text{type-mv})]
+                {\Delta; R \vdash \mv\ r_d, r_s; I}
+                {\Delta;
+                R \vdash r_s : \tau &
+                \Delta; R[r_d = \tau] \vdash I}
+            \\
+            \infer[(\text{type-mvscratch})]
+                {\Delta; R \vdash \mvscratch\ r_d; I}
+                {\Delta; R \vdash r_s : \scratch \rho_{scratch} &
+                \Delta; R[r_d = \scratch \rho_{scratch}] \vdash I}
+            \\
+            \infer[(\text{type-mvshared})]
+                {\Delta; R \vdash \mvshared\ r_d; I}
+                {\Delta; R \vdash r_s : \scratch \rho_{shared} &
+                \Delta; R[r_d = \scratch \rho_{shared}] \vdash I}
+            \\
+        \end{array}
+    \end{equation*}
+    \caption{Typing rules}
+    \label{fig:typing-rules}
+\end{figure}
+
+
+% \subsection{Dependent types}
+% 
+% Because of the restrictions on the implementation domain, we can restrict the
+% dependent types to contain fewer index propositions.
+% 
+% % Dependent types are a mess, since
+% 
+% \begin{lstlisting}
+%     L0:     {n: int | n > 0}
+%             [a0: int(n)]
+%             muli    a1, a0, 4       ; a1: n * 4
+%             sub     sp, sp, a1      ; sp: top_0 :: ... :: top_n :: sp
+%             mv      a1, a0
+%             mv      a0, sp
+%     L1:     ('m)
+%             {n: int | n > 0}
+%             [a0: 'm int array(n), a1: int(n)]
+% \end{lstlisting}
+% Is a valid program. The two \var{n}s are locally scoped, so they share no
+% information, however they should represent the same value in this case.
+% Since \var n is not known, only that it is a natural non-zero number, it is not
+% known how many words are pushed to the stack, therefore its type depends on
+% \var n.
+% 
+% However, since the lack of control flow, loops do not exist and the language
+% turns novel. Then there is no way to store \var n words, and therefore no
+% reason to be able to allocate a variable amount of words. The language reduces
+% to constant expressions. In future work, reintroducing control flow is a must,
+% and as discussed previously (TODO: HOPEFULLY) dependent types can be used to
+% infer some loop iterations. For this, we would sorely miss type variables in
+% index expressions.
+% 
+% 
+% This reduces stack type rules to
+% \begin{equation*}
+%     \infer[(\sub)]
+%     {\Phi;\ \Delta;\ R \vdash \sub\ r_d,\ r_s,\ v}
+%     {}
+% \end{equation*}
+
+\subsection{Coercion}
+We start by introducing the type equality and coercion rules.
+
+The typing rules for collection types contain a lowercase c $c$, which is
+taken to mean the pattern matched type of either $\tau\ array(i)$ or $S$.
+\begin{figure}
+    \begin{equation*}
+        \begin{array}{c}
+            \infer[(\text{type-eq-var})]
+                {\Delta \models \alpha \equiv \alpha}
+                {\alpha \in \Delta}
+            \\
+            \infer[(\text{type-eq-top})]
+                {\Delta \models \ttop \equiv \ttop}
+                {}
+            \\
+            \infer[(\text{type-eq-int})]
+                {\Delta \models int \equiv int}
+                {}
+            \\
+            \infer[(\text{type-eq-stack})]
+                {\Delta
+                \models
+                \tau_0^l \cons \cdots \cons \tau_n^l \cons \emptystack
+                \equiv
+                \tau_0^r \cons \cdots \cons \tau_n^r \cons \emptystack}
+                {\Delta \models \tau_0^l \equiv \tau_0^r &
+                \cdots &
+                \Delta \models \tau_n^l \equiv \tau_n^r
+                }
+            \\
+            \infer[(\text{type-eq-array})]
+                {\Delta
+                \models
+                \tau\ array(i)
+                \equiv
+                \tau'\ array(j)}
+                {\Delta \models \tau \equiv \tau' &
+                i = j}
+            \\
+            \infer[(\text{region-eq-scratch})]
+                {\Delta \models \scratch \equiv \scratch}
+                {}
+            \\
+            \infer[(\text{region-eq-shared})]
+                {\Delta \models \shared \equiv \shared}
+                {}
+            \\
+            \infer[(\text{type-eq-collection})]
+                {\Delta
+                \models
+                \mu\ c
+                \equiv
+                \mu'\ c'}
+                {\Delta \models \mu \equiv \mu' &
+                \Delta \models c \equiv c' }
+            \\
+        \end{array}
+    \end{equation*}
+    \caption{Type equality rules}
+\end{figure}
+\begin{figure}
+    \begin{equation*}
+        \begin{array}{c}
+            \infer[(\text{type-coerce-var})]
+                {\Delta \models \alpha \leq \alpha}
+                {\alpha \in \Delta}
+            \\
+            \infer[(\text{type-coerce-top})]
+                {\Delta \models \tau \leq \ttop}
+                {}
+            \\
+            \infer[(\text{type-coerce-int})]
+                {\Delta \models int \leq int}
+                {}
+            \\
+            \infer[(\text{type-coerce-stack})]
+                {\Delta \models
+                \tau_0^l \cons \cdots \cons \tau_n^l \cons S
+                \equiv
+                \tau_0^r \cons \cdots \cons \tau_n^r \cons S'}
+                {\Delta \models \tau_0^l \equiv \tau_0^r &
+                \cdots &
+                \Delta \models \tau_n^l \equiv \tau_n^r
+                }
+            \\
+            \infer[(\text{type-coerce-array})]
+                {\Delta \models \tau\ array(i) \leq \tau'\ array(j)}
+                {\Delta \models \tau\ array(i) \equiv \tau'\ array(j)}
+            \\
+            \infer[(\text{type-coerce-array-stack})]
+                {\Delta
+                \models
+                \tau\ array(i)
+                \leq
+                \tau_0 \cons \cdots \cons \tau_i \cons S}
+                {\Delta \models \tau \equiv \tau_0 &
+                \cdots &
+                \Delta \models \tau \equiv \tau_i}
+            \\
+            \infer[(\text{type-coerce-collection})]
+                {\Delta \models \mu\ c \leq \mu' c'}
+                {\Delta \models \mu \equiv \mu' &
+                \Delta \models c \leq c'}
+        \end{array}
+    \end{equation*}
+    \caption{Type coercion rules}
+\end{figure}
+
+\subsection{Jumping}
+
+\subsection{Syntax}
+The syntax for the language is described in figure \ref{syn:my-tal}, which
+takes inspiration from DTAL\cite{xi-dtal}.
+As have been discussed, in a complete language with control-flow, type variables should be reintroduced into index expressions.
+
+An example program could look like figure \ref{code:mtal}
+
+\begin{figure}
+    \begin{lstlisting}[gobble=8]
+        start:  [a0: int, a1: int, a2: int, a3: int]
+                subi    sp, sp, 16      ; sp: scratch top :: top :: top :: top :: 'r
+                mv      a4, sp
+        coerce: ('m)
+                [a0: int, a1: int, a2: int, a3: int, a4: 'm int array(4)]
+                lw      a0, 0(a4)       ; a4: scratch int :: ..
+                lw      a1, 4(a4)       ; a4: scratch int :: int :: ..
+                lw      a2, 8(a4)       ; a4: scratch int :: int :: int ..
+                lw      a3, 12(a4)      ; a4: scratch int :: int :: int :: int :: 'r
+    \end{lstlisting}
+    \caption{Example program}
+    \label{code:mtal}
+\end{figure}
+
+\subsection{Code Generation}
 \begin{figure}
     \begin{equation*}
         \begin{array}{lcl}
@@ -427,92 +801,4 @@ They may be best explained through their code generation, shown in figure \ref{f
     \end{equation*}
     \caption{Code generation for \incr and \decr}
     \label{fig:incr-codegen}
-\end{figure}
-
-
-
-\subsection{Abstract machine}
-    Unlike other TAL abstract machines, I am omitting the stack, since it will
-    be used as a normal register (\var{sp}).
-    The DTAL abstract machine has a machine state $\mathcal M$ $(\mathcal H,
-    \mathcal R, \mathcal S)$ being a triple over a heap, register file, and
-    stack.
-    Since the system the language is targeted at is stack based, no heap is
-    needed (except for program text, but this is omitted partially due to
-    program scope) and no explicit stack is needed, since the register \var{sp}
-    will be used.
-    A such, the abstract machine contains only a finite mapping
-    between registers and values.
-
-    This is also the motivation behind removing the DTAL type state $\Sigma$
-    and state type $\sigma$.
-
-\subsection{Dynamic Semantics}
-
-\subsection{Dependent types}
-
-Because of the restrictions on the implementation domain, we can restrict the
-dependent types to contain fewer index propositions.
-
-% Dependent types are a mess, since
-
-\begin{lstlisting}
-    L0:     {n: int | n > 0}
-            [a0: int(n)]
-            muli    a1, a0, 4       ; a1: n * 4
-            sub     sp, sp, a1      ; sp: top_0 :: ... :: top_n :: sp
-            mv      a1, a0
-            mv      a0, sp
-    L1:     ('m)
-            {n: int | n > 0}
-            [a0: 'm int array(n), a1: int(n)]
-\end{lstlisting}
-Is a valid program. The two \var{n}s are locally scoped, so they share no
-information, however they should represent the same value in this case.
-Since \var n is not known, only that it is a natural non-zero number, it is not
-known how many words are pushed to the stack, therefore its type depends on
-\var n.
-
-However, since the lack of control flow, loops do not exist and the language
-turns novel. Then there is no way to store \var n words, and therefore no
-reason to be able to allocate a variable amount of words. The language reduces
-to constant expressions. In future work, reintroducing control flow is a must,
-and as discussed previously (TODO: HOPEFULLY) dependent types can be used to
-infer some loop iterations. For this, we would sorely miss type variables in
-index expressions.
-
-
-this reduces stack type rules to
-\begin{equation*}
-    \infer[(\sub)]
-    {\Phi;\ \Delta;\ R \vdash \sub\ r_d,\ r_s,\ v}
-    {}
-\end{equation*}
-
-
-\subsection{Dynamic Semantics}
-
-\subsection{Coercion}
-
-\subsection{Syntax}
-The syntax for the language is described in figure \ref{syn:my-tal}, which
-takes inspiration from DTAL\cite{xi-dtal}.
-As have been discussed, in a complete language with control-flow, type variables should be reintroduced into index expressions.
-
-An example program could look like figure \ref{code:mtal}
-
-\begin{figure}
-    \begin{lstlisting}[gobble=8]
-        start:  [a0: int, a1: int, a2: int, a3: int]
-                subi    sp, sp, 16      ; sp: scratch top :: top :: top :: top :: 'r
-                mv      a4, sp
-        coerce: ('m)
-                [a0: int, a1: int, a2: int, a3: int, a4: 'm int array(4)]
-                lw      a0, 0(a4)       ; a4: scratch int :: ..
-                lw      a1, 4(a4)       ; a4: scratch int :: int :: ..
-                lw      a2, 8(a4)       ; a4: scratch int :: int :: int ..
-                lw      a3, 12(a4)      ; a4: scratch int :: int :: int :: int :: 'r
-    \end{lstlisting}
-    \caption{Example program}
-    \label{code:mtal}
 \end{figure}

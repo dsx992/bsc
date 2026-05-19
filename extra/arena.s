@@ -21,14 +21,18 @@ main:
 	addi	sp,sp,-16
 	sw	ra,12(sp)
 	sw	s0,8(sp)
+
 	addi	s0,sp,16
+
 	lui	a5,%hi(scratch_arena)
 	addi	a5,a5,%lo(scratch_arena)
+
 	lw	a5,8(a5)
 	addi	a4,a5,16
 	lui	a5,%hi(scratch_arena)
 	addi	a5,a5,%lo(scratch_arena)
 	sw	a4,8(a5)
+
 	li	a5,0
 	mv	a0,a5
 	lw	ra,12(sp)
