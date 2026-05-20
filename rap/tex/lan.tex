@@ -55,6 +55,8 @@ Maybe it should be called novel TAL or NTAL lol.
                                     &       & \mid& \incr\ r_d,\ r_s,\ v \\
                                     &       & \mid& \decr\ r_d,\ r_s,\ v \\
                                     &       & \mid& \mv\ r_d,\ r_s \\
+                                    &       & \mid& \jump\ v\\
+                                    &       & \mid& \halt \\
                                     &       & \mid& \mvscratch\ r_d \\
                                     &       & \mid& \mvshared\ r_d \\
             \text{arithmetic operations}    & aop   & ::= & \add \mid \sub 
@@ -67,6 +69,8 @@ Maybe it should be called novel TAL or NTAL lol.
                                                     ins;\ I
                                                     \\
             \text{Blocks}           & B & ::= & \lambda \Delta.(R, I) \\
+            \text{Label mappings}   & \Lambda & ::= &
+                        \{l_1 : \sigma_1, \cdots, l_n : \sigma_n\} \\
             \text{Programs}         & P & ::= & l_1: B_1; \cdots ; l_n : B_n \\
             % \text{index expressions}        & x     & ::= & i \\
         \end{array}
@@ -381,27 +385,6 @@ therefore the typing rules would not work.
 
 While the purpose of the language is only typed memory regions, 
 
-\subsubsection{Unitialized values} Since the stack \incr instruction
-essentially creates garbage values, we may want to type it, and introduce a
-notion of instantiated and uninstantiated types\cite{stal}.
-
-Essentially, the regions type --- while in C is just a pointer --- is a
-lifted stack type containing the whole region.
-When memory is allocated in an arena, the type of the returned memory is a
-coerced slice of the arena.
-If an arena has region of type $\ttop_0 \cons \cdots \cons \ttop_n \cons
-\emptystack$, then an offset of $k$ words gives the stack $\ttop_k \cons \cdots
-\cons \ttop_n \cons \emptystack$, which can be coerced into an array of fitting
-type and size.
-
-Since the language --- like other TALs --- only work on word sized types but
-operations on memory in risc-v (like moving the stack pointer) is not aligned,
-we want to constrain the syntax to only allow word-size operations.
-Only stacks can change size (through arithmetic operations on a stack pointer)
-so it suffices to introduce instructions \incr and \decr.
-They may be best explained through their code generation, shown in figure \ref{fig:incr-codegen}
-
-
 \subsection{Abstract machine}
     Unlike other TAL abstract machines, I am omitting the stack, since it will
     be used as a normal register (\var{sp}).
@@ -467,33 +450,7 @@ at $J_P(ic)$. Similarly $ic'$ is incremented or replaced in the case of \jump.
 Similar to DTAL.
 
 \begin{figure}
-    \begin{equation*}
-        \begin{array}{c}
-        \infer[(\text{eval-add})]
-            {(ic, \mathcal R) \rightarrow_P (ic + 1, \mathcal R[r_d = i + j])}
-            {J(ic) = \add\ r_d, r_s, v & \mathcal M(r_s) = i & \mathcal M(v) = j}
-        \\
-        \infer[(\text{eval-incr})]
-            {(ic, \mathcal R) 
-            \rightarrow_P
-            (ic + 1,\mathcal R[r_d = \mu\ \ttop_0 \cons \cdots \cons \ttop_i \cons S])}
-            {J(ic) = \incr\ r_d,\ r_s,\ v &
-                \mathcal M(r_s) = \mu\ S &
-                \mathcal M(v) = i &
-                i > 0
-            }
-        \\
-        \infer[(\text{eval-decr})]
-            {(ic, \mathcal R) 
-            \rightarrow_P
-            (ic + 1,\mathcal R[r_d = \mu\ S])}
-            {J(ic) = \incr\ r_d,\ r_s,\ v &
-                \mathcal M(r_s) = \mu\ \ttop_0 \cons \cdots \cons \ttop_i \cons S &
-                \mathcal M(v) = i &
-                i > 0
-            }
-        \end{array}
-    \end{equation*}
+    \input{figs/eval-rules}
     \caption{Evaluation rules}
     \label{fig:eval-rules}
 \end{figure}
@@ -513,67 +470,32 @@ physical size. Since the scratchpad is 128KB\cite{sigma}, $\rho_{scratch}$ may
 be defined as $\ttop_1 \cons \cdots \cons \ttop_{128 / w \cdot 1000} \cons
 \emptystack$ where $w$ is the machines wordsize.
 
+The type rules for values in figure \ref{fig:typing-rules-values} depend on the
+label mapping $\Lambda$ for typing labels. This is the meaning of the notation
+$\vdash_\Lambda$, where $\Lambda$ is a label mapping function.
+In practice, only one label mapping function will be used, so for brevity
+$\vdash$ may be used --- like in DTAL.
+
+The typing rules for arithmetic instructions follow from \add in figure
+\ref{fig:typing-rules}.
+
+The typing for jumps \jump do not continue checking the instructions of the
+target block.
+It checks if the current state aligns with the state type $\sigma$ in the
+target block.
+This means comparing each register type. This is explained in section
+\ref{sec:type-eq-co}.
+Since the handling of stacks and arrays rely heavily on subtyping, we use the
+coercion rules for comparison or acceptance of a new state type.
+
 \begin{figure}
-    \begin{equation*}
-        \begin{array}{c}
-            \infer[(\text{type-int})]
-                {\Delta; R \vdash i : int(i)}
-                {}
-            \\
-            \infer[(\text{type-stack})]
-                {\Delta; R \vdash \mu\  S : }
-                {}
-        \end{array}
-    \end{equation*}
+    \input{figs/typing-rules-values}
     \caption{Typing rules for values}
     \label{fig:typing-rules-values}
 \end{figure}
 
 \begin{figure}
-    \begin{equation*}
-        \begin{array}{c}
-            \infer[(\text{type-add})]
-                {\Delta; R \vdash \add\ r_d, r_s, v; I}
-                {\Delta; R \vdash r_s : int &
-                \Delta; R \vdash v : int &
-                \Delta; R \vdash I}
-            \\
-            \infer[(\text{type-incr})]
-                {\Delta; R \vdash \incr\ r_d, r_s, v; I}
-                {\Delta; R \vdash r_s : \mu\ S &
-                \Delta; R \vdash v : int(i) &
-                i > 0 &
-                \Delta;
-                R[r_d = \mu\ \ttop_1 \cons \cdots \cons \ttop_i \cons S]
-                \vdash I}
-            \\
-            \infer[(\text{type-decr})]
-                {\Delta; R \vdash \decr\ r_d, r_s, v; I}
-                {\Delta;
-                    R \vdash r_s :
-                    \mu\ \tau_1 \cons \cdots \cons \tau_i \cons S &
-                \Delta; R \vdash v : int(i) &
-                i > 0 &
-                \Delta; R[r_d = \mu\ S] \vdash I}
-            \\
-            \infer[(\text{type-mv})]
-                {\Delta; R \vdash \mv\ r_d, r_s; I}
-                {\Delta;
-                R \vdash r_s : \tau &
-                \Delta; R[r_d = \tau] \vdash I}
-            \\
-            \infer[(\text{type-mvscratch})]
-                {\Delta; R \vdash \mvscratch\ r_d; I}
-                {\Delta; R \vdash r_s : \scratch \rho_{scratch} &
-                \Delta; R[r_d = \scratch \rho_{scratch}] \vdash I}
-            \\
-            \infer[(\text{type-mvshared})]
-                {\Delta; R \vdash \mvshared\ r_d; I}
-                {\Delta; R \vdash r_s : \scratch \rho_{shared} &
-                \Delta; R[r_d = \scratch \rho_{shared}] \vdash I}
-            \\
-        \end{array}
-    \end{equation*}
+    \input{figs/typing-rules}
     \caption{Typing rules}
     \label{fig:typing-rules}
 \end{figure}
@@ -619,67 +541,16 @@ be defined as $\ttop_1 \cons \cdots \cons \ttop_{128 / w \cdot 1000} \cons
 %     {}
 % \end{equation*}
 
-\subsection{Coercion}
+\subsection{Type Equality and Coercion} \label{sec:type-eq-co}
 We start by introducing the type equality and coercion rules.
 
 The typing rules for collection types contain a lowercase c $c$, which is
 taken to mean the pattern matched type of either $\tau\ array(i)$ or $S$.
 \begin{figure}
-    \begin{equation*}
-        \begin{array}{c}
-            \infer[(\text{type-eq-var})]
-                {\Delta \models \alpha \equiv \alpha}
-                {\alpha \in \Delta}
-            \\
-            \infer[(\text{type-eq-top})]
-                {\Delta \models \ttop \equiv \ttop}
-                {}
-            \\
-            \infer[(\text{type-eq-int})]
-                {\Delta \models int \equiv int}
-                {}
-            \\
-            \infer[(\text{type-eq-stack})]
-                {\Delta
-                \models
-                \tau_0^l \cons \cdots \cons \tau_n^l \cons \emptystack
-                \equiv
-                \tau_0^r \cons \cdots \cons \tau_n^r \cons \emptystack}
-                {\Delta \models \tau_0^l \equiv \tau_0^r &
-                \cdots &
-                \Delta \models \tau_n^l \equiv \tau_n^r
-                }
-            \\
-            \infer[(\text{type-eq-array})]
-                {\Delta
-                \models
-                \tau\ array(i)
-                \equiv
-                \tau'\ array(j)}
-                {\Delta \models \tau \equiv \tau' &
-                i = j}
-            \\
-            \infer[(\text{region-eq-scratch})]
-                {\Delta \models \scratch \equiv \scratch}
-                {}
-            \\
-            \infer[(\text{region-eq-shared})]
-                {\Delta \models \shared \equiv \shared}
-                {}
-            \\
-            \infer[(\text{type-eq-collection})]
-                {\Delta
-                \models
-                \mu\ c
-                \equiv
-                \mu'\ c'}
-                {\Delta \models \mu \equiv \mu' &
-                \Delta \models c \equiv c' }
-            \\
-        \end{array}
-    \end{equation*}
+    \input{figs/type-eq-rules}
     \caption{Type equality rules}
 \end{figure}
+
 \begin{figure}
     \begin{equation*}
         \begin{array}{c}
