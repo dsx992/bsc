@@ -16,6 +16,17 @@ implemented is discussed. The biggest constraint and factor of deciding that
 control-flow is out of scope is due to the solving process (predicate logic SAT
 solving).
 
+\subsection{The tool}
+
+The tool shall take a program in the language specified in section
+\ref{sec:lan}, and produce an estimate of its runtime.
+
+From the code it produces a list of instruction and state type tuples, wherein
+the sum of each instruction time is calculated.
+For arithmetic instructions this will be constant, and for memory operations it
+will depend on the memory type.
+For the pseudo instructions, they will of course take what is equivalent to
+their code generation.
 
 
 

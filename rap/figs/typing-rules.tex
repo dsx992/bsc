@@ -1,0 +1,49 @@
+\begin{equation*}
+    \begin{array}{c}
+        \infer[(\text{type-add})]
+            {\Delta; R \vdash \add\ r_d, r_s, v; I}
+            {\Delta; R \vdash r_s : int &
+            \Delta; R \vdash v : int &
+            \Delta; R \vdash I}
+        \\
+        \infer[(\text{type-incr})]
+            {\Delta; R \vdash \incr\ r_d, r_s, v; I}
+            {\Delta; R \vdash r_s : \mu\ S &
+            \Delta; R \vdash v : int(i) &
+            i > 0 &
+            \Delta;
+            R[r_d = \mu\ \ttop_1 \cons \cdots \cons \ttop_i \cons S]
+            \vdash I}
+        \\
+        \infer[(\text{type-decr})]
+            {\Delta; R \vdash \decr\ r_d, r_s, v; I}
+            {\Delta;
+                R \vdash r_s :
+                \mu\ \tau_1 \cons \cdots \cons \tau_i \cons S &
+            \Delta; R \vdash v : int(i) &
+            i > 0 &
+            \Delta; R[r_d = \mu\ S] \vdash I}
+        \\
+        \infer[(\text{type-mv})]
+            {\Delta; R \vdash \mv\ r_d, r_s; I}
+            {\Delta;
+            R \vdash r_s : \tau &
+            \Delta; R[r_d = \tau] \vdash I}
+        \\
+        \infer[(\text{type-mvscratch})]
+            {\Delta; R \vdash \mvscratch\ r_d; I}
+            {\Delta; R[r_d = \scratch\ \rho_{scratch}] \vdash I}
+        \\
+        \infer[(\text{type-mvshared})]
+            {\Delta; R \vdash \mvshared\ r_d; I}
+            {\Delta; R[r_d = \shared\ \rho_{shared}] \vdash I}
+        \\
+        \infer[(\text{type-jump})]
+            {\Delta; R \vdash \jump\ v}
+            {
+                \Delta; R \vdash v : \lambda \emptytv. R' &
+                \Delta; R \models_c R' \leadsto \Delta'
+            }
+        \\
+    \end{array}
+\end{equation*}

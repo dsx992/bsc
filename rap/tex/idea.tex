@@ -1,0 +1,21 @@
+\section{Possibilities}
+
+\subsection{Control flow}
+    One of the motivations behind typed assembly languages as presented earlier
+    (TODO: REF SECTION) is control flow.
+    TAL-0 introduces types to code to restrict where jumps are allowed to
+    target.
+    Control-flow in regards to execution time analysis is not so interested in
+    the validity of jumps but on the amount of jumps, i.e. loops.
+
+    Control-flow graph
+
+    By using DTAL and considering a program an oriented graph where blocks are
+    nodes and branches are edges to create something like a control-flow graph.
+
+\subsection{Typing memory}
+    The chosen platform is explicit in its memory hierarchy, which enables it
+    to be explicit in code as well. This can be done through a type system, so
+    any array or stack type is wrapped inside a memory region context.
+
+\subsection{}

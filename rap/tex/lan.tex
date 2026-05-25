@@ -1,4 +1,4 @@
-\section{Getting to a language}
+\section{Getting to a language}\label{sec:lan}
 This section describes the process, the steps, and the considerations for
 designing the risc-v styled typed assembly language suited for static
 worst-case execution time analysis.
@@ -15,66 +15,10 @@ If a register is not explicitly typed, it will default to \ttop.
 The jump instruction \jump is kept only to link blocks together, mimicking
 assembly fall-through.
 
-Maybe it should be called novel TAL or NTAL lol.
+% Maybe it should be called novel TAL or NTAL lol.
 
 \begin{figure}
-    \begin{equation*}
-        \begin{array}{llcl}
-            \text{type variables}           & \alpha \\
-            \text{State type}       & \sigma & ::= & \lambda \Delta.R \\
-            \text{Register files}   & R     & ::= & [
-                                                        \texttt{zero} : int,
-                                                        \texttt{ra} : \tau_1,
-                                                        \texttt{sp} : S,
-                                                        \cdots
-                                                    ] \\
-            \text{region memory types variables} & \mu \\
-            \text{region memory types}      & M     & ::= & scratch \mid shared \mid \mu \\
-            \text{stack types variables}    & \rho  & & \\
-            \text{stack types}              & S     & ::= & [] \mid \rho \mid \tau :: S \\
-            \text{Collection types}         & C     & ::= & M\ \tau\ array(i)
-                                                        \mid M\ S
-                                                        \\
-            \text{types}                    & \tau  & ::= & \alpha
-                                                        \mid \ttop
-                                                        \mid int
-                                                        \mid int(i)
-                                                        \mid C
-                                                        \\
-            \text{type variable contexts}   & \Delta & ::= & \cdot_\mathrm{tv} 
-                                                        \mid \Delta, \mu 
-                                                        \mid \Delta, \rho 
-                                                        \mid \Delta, \alpha
-                                                        \\
-            \text{integer literals}         & i \\
-            \text{constants}                & c     & ::= & i \mid l \\
-            \text{values}                   & v     & ::= & c \mid r \mid C \\
-            \text{labels}                   & l \\
-            \text{instructions}     & ins   & ::= & aop\ r_d,\ r_s,\ v \\
-                                    % &       & \mid& bop\ r,\ v \\
-                                    &       & \mid& \incr\ r_d,\ r_s,\ v \\
-                                    &       & \mid& \decr\ r_d,\ r_s,\ v \\
-                                    &       & \mid& \mv\ r_d,\ r_s \\
-                                    &       & \mid& \jump\ v\\
-                                    &       & \mid& \halt \\
-                                    &       & \mid& \mvscratch\ r_d \\
-                                    &       & \mid& \mvshared\ r_d \\
-            \text{arithmetic operations}    & aop   & ::= & \add \mid \sub 
-                                                \mid \mul \mid \ddiv \\
-            \text{instruction sequences}    & I     & ::= & 
-                                                    \jump\ v
-                                                    \mid 
-                                                    \halt
-                                                    \mid 
-                                                    ins;\ I
-                                                    \\
-            \text{Blocks}           & B & ::= & \lambda \Delta.(R, I) \\
-            \text{Label mappings}   & \Lambda & ::= &
-                        \{l_1 : \sigma_1, \cdots, l_n : \sigma_n\} \\
-            \text{Programs}         & P & ::= & l_1: B_1; \cdots ; l_n : B_n \\
-            % \text{index expressions}        & x     & ::= & i \\
-        \end{array}
-    \end{equation*}
+    \input{figs/syntax}
     \caption{Syntax for a typed assembly language.}
     \label{syn:my-tal}
 \end{figure}
@@ -115,8 +59,8 @@ may be.
 \subsection{Types}
 While the syntax of the language is inspired by DTAL, it is much simplified (or
 mangled, even).
-This is also the case of the $\tau$ types, where only $a$, \ttop, and $int$
-remain. The array and stack types are still present but wrapped, but
+This is also the case of the $\tau$ types, where only $a$, \ttop, $int$, and
+$int(i)$ remain. The array and stack types are still present but wrapped, but
 collections will be explained later.
 Universally quantified types, i.e. type variables are still present, although
 they do not serve a concrete function. Stack type variables are still present.
@@ -139,6 +83,18 @@ It follows that they should only allow immediate values.
 This is reflected in their evaluation rules and typing rules in figure
 \ref{fig:eval-rules} and figure \ref{fig:typing-rules-values}, respectively.
 
+The type variable context strays from the inspiration (DTAL) by essentially a
+set of bindings. The inspiration comes from the hindley-milner
+algorithm\cite{pldi}.
+This choice also has a big implication on the type equality and coercion rules,
+as these now produce a side-effect, i.e. they change or add mappings to the
+context $\Delta$.
+Another implication of this is that it forces the entrypoint to have no type
+variables. This makes sense, as there would be no way to deduce the type
+information. If for some reason one wanted to explicitly state \say{anything}
+one would have to use \ttop.
+If $\alpha \in \dom(\Delta)$ then $\Delta{\alpha} = \tau$, and similarly for
+$\mu$ and $\rho$.
 
 \subsection{Collections}
 This section describes how the array and stack types work with each other, and
@@ -488,6 +444,33 @@ This means comparing each register type. This is explained in section
 Since the handling of stacks and arrays rely heavily on subtyping, we use the
 coercion rules for comparison or acceptance of a new state type.
 
+The type rules differ from DTAL in that they use and (potentially) \emph{update} the type variable context $\Delta$.
+This is specifically for variable typing rules.
+The motivation for this choice is jumps, going from one machine state to
+another.
+To make use of the ergonomics discussed earlier in regards to handling stacks
+and arrays, a machine state $M$ consisting of a register file and variable
+mapping can jump to $M'$ iff $M$ can be coerced into $M'$.
+Or in other words
+\begin{equation*}
+    \Delta, R \models_c R' \leadsto \Delta'
+\end{equation*}
+When adding a binding to a type variable context, we do not want to
+accidentally define circular types such as $\alpha \colon \beta,\ \beta \colon
+\alpha$.
+This is why the variable type equality and coercion do not have rules for other
+variables, and as a consequence, type variable contexts can only have a depth
+of one, if one were to imagine $\Delta$ as a graph.
+This is not dissimilar in the treatment of existential qualifiers\cite{lics},
+in the sense of a graph.
+
+Because of this constraint type variables cannot refer to other type variables,
+when we coerce register files we can assert that at type-coerce-regfile,
+type-reg will never evaluate to a type variable. This means that there is no
+need to check if variables in the two register files are unique, or in other
+words, we do not have to create fresh variables, something that is required for
+hindley-milner type inference\cite{pldi}.
+
 \begin{figure}
     \input{figs/typing-rules-values}
     \caption{Typing rules for values}
@@ -546,60 +529,49 @@ We start by introducing the type equality and coercion rules.
 
 The typing rules for collection types contain a lowercase c $c$, which is
 taken to mean the pattern matched type of either $\tau\ array(i)$ or $S$.
+
+The coercion rules allow the type variable context to be modified, by coercing
+type variables into types.
+The use case is limited to state transitions, i.e. jumps. This is the part that binds type variables to types, specifically
+\begin{equation*}
+    \infer
+        {\Delta; R \models_c R' \leadsto \Delta_n}
+        {
+            % \Delta; R \vdash r_1 : \tau_1 &
+            % \emptytv; R' \vdash r_1 : \tau'_1 &
+            % \emptytv \models \tau'_1 \leq \tau_1 \leadsto \Delta_1 &
+            % \cdots &
+            \Delta; R \vdash r_n : \tau_n &
+            \Delta_{n - 1}; R' \vdash r_n : \tau'_n &
+            \emptytv \models \tau'_n \leq \tau_n \leadsto \Delta_n
+        }
+\end{equation*}
+where $\Delta_n$ is created through accumulating type captures starting at
+$\Delta_1 = \emptytv$ for all $n$ registers.
+
+Since I decided to reflect the risc-v register ABI names in the syntax of the
+language, it is not actually possible to iterate over all registers. Not for
+any semantic reasons. Therefore I informally introduce $r_n$ to be a register,
+and the above meaning is that it iterates over all ($n$) registers.
+
 \begin{figure}
     \input{figs/type-eq-rules}
     \caption{Type equality rules}
+    \label{fig:type-eq-rules}
 \end{figure}
 
 \begin{figure}
-    \begin{equation*}
-        \begin{array}{c}
-            \infer[(\text{type-coerce-var})]
-                {\Delta \models \alpha \leq \alpha}
-                {\alpha \in \Delta}
-            \\
-            \infer[(\text{type-coerce-top})]
-                {\Delta \models \tau \leq \ttop}
-                {}
-            \\
-            \infer[(\text{type-coerce-int})]
-                {\Delta \models int \leq int}
-                {}
-            \\
-            \infer[(\text{type-coerce-stack})]
-                {\Delta \models
-                \tau_0^l \cons \cdots \cons \tau_n^l \cons S
-                \equiv
-                \tau_0^r \cons \cdots \cons \tau_n^r \cons S'}
-                {\Delta \models \tau_0^l \equiv \tau_0^r &
-                \cdots &
-                \Delta \models \tau_n^l \equiv \tau_n^r
-                }
-            \\
-            \infer[(\text{type-coerce-array})]
-                {\Delta \models \tau\ array(i) \leq \tau'\ array(j)}
-                {\Delta \models \tau\ array(i) \equiv \tau'\ array(j)}
-            \\
-            \infer[(\text{type-coerce-array-stack})]
-                {\Delta
-                \models
-                \tau\ array(i)
-                \leq
-                \tau_0 \cons \cdots \cons \tau_i \cons S}
-                {\Delta \models \tau \equiv \tau_0 &
-                \cdots &
-                \Delta \models \tau \equiv \tau_i}
-            \\
-            \infer[(\text{type-coerce-collection})]
-                {\Delta \models \mu\ c \leq \mu' c'}
-                {\Delta \models \mu \equiv \mu' &
-                \Delta \models c \leq c'}
-        \end{array}
-    \end{equation*}
+    \input{figs/type-co-rules}
     \caption{Type coercion rules}
+    \label{fig:type-co-rules}
 \end{figure}
 
-\subsection{Jumping}
+The coercion rules make it possible to capture type variables and assign them a
+type. The \say{instantiation} rules refer to those where the type variable is
+not already in the variable context; the binding is inserted into  the context.
+It is quite conceivable that the same type variable be used multiple times in
+the same register file, in this case the coercion type needs to be equal to the
+type already bound to the type variable in the type variable context.
 
 \subsection{Syntax}
 The syntax for the language is described in figure \ref{syn:my-tal}, which

@@ -1,0 +1,58 @@
+\begin{equation*}
+    \begin{array}{llcl}
+        \text{type variables}           & \alpha \\
+        \text{State type}       & \sigma & ::= & \lambda \Delta.R \\
+        \text{Register files}   & R     & ::= & [
+                                                    \texttt{zero} : int,
+                                                    \texttt{ra} : \tau_1,
+                                                    \texttt{sp} : S,
+                                                    \cdots
+                                                ] \\
+        \text{region memory types variables} & \mu \\
+        \text{region memory types}      & M     & ::= & scratch \mid shared \mid \mu \\
+        \text{stack types variables}    & \rho  & & \\
+        \text{stack types}              & S     & ::= & [] \mid \rho \mid \tau :: S \\
+        \text{Collection types}         & C     & ::= & M\ \tau\ array(i)
+                                                    \mid M\ S
+                                                    \\
+        \text{types}                    & \tau  & ::= & \alpha
+                                                    \mid \ttop
+                                                    \mid int
+                                                    \mid int(i)
+                                                    \mid C
+                                                    \\
+        \text{type variable contexts}   & \Delta & ::= &
+                                    \emptytv
+                                    \mid \Delta, \mu : M
+                                    \mid \Delta, \rho : S
+                                    \mid \Delta, \alpha : \tau
+                                    \\
+        \text{integer literals}         & i \\
+        \text{constants}                & c     & ::= & i \mid l \\
+        \text{values}                   & v     & ::= & c \mid r \mid C \\
+        \text{labels}                   & l \\
+        \text{instructions}     & ins   & ::= & aop\ r_d,\ r_s,\ v \\
+                                % &       & \mid& bop\ r,\ v \\
+                                &       & \mid& \incr\ r_d,\ r_s,\ v \\
+                                &       & \mid& \decr\ r_d,\ r_s,\ v \\
+                                &       & \mid& \mv\ r_d,\ r_s \\
+                                &       & \mid& \jump\ v\\
+                                &       & \mid& \halt \\
+                                &       & \mid& \mvscratch\ r_d \\
+                                &       & \mid& \mvshared\ r_d \\
+        \text{arithmetic operations}    & aop   & ::= & \add \mid \sub 
+                                            \mid \mul \mid \ddiv \\
+        \text{instruction sequences}    & I     & ::= & 
+                                                \jump\ v
+                                                \mid 
+                                                \halt
+                                                \mid 
+                                                ins;\ I
+                                                \\
+        \text{Blocks}           & B & ::= & \lambda \Delta.(R, I) \\
+        \text{Label mappings}   & \Lambda & ::= &
+                    \{l_1 : \sigma_1, \cdots, l_n : \sigma_n\} \\
+        \text{Programs}         & P & ::= & l_1: B_1; \cdots ; l_n : B_n \\
+        % \text{index expressions}        & x     & ::= & i \\
+    \end{array}
+\end{equation*}

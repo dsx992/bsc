@@ -1,0 +1,40 @@
+\begin{equation*}
+    \begin{array}{c}
+        \infer[(\text{type-immediate-int})]
+            {\Delta; R \vdash_\Lambda i : int(i)}
+            {}
+        \\
+        \infer[(\text{type-label})]
+            {\Delta; R \vdash_\Lambda l : \sigma}
+            {\Lambda(l) = \sigma}
+        \\
+        \infer[(\text{type-reg})]
+            {\Delta; R \vdash_\Lambda r : R(r)}
+            {}
+        \\
+        \infer[(\text{type-var})]
+            {
+                \Delta; R 
+                \vdash_\Lambda 
+                \alpha : \tau
+            }
+            {\Delta(\alpha) = \tau}
+        \\
+        \infer[(\text{type-stack-var})]
+            {
+                \Delta; R 
+                \vdash_\Lambda 
+                \rho : S
+            }
+            {\Delta(\rho) = S}
+        \\
+        \infer[(\text{type-memory-var})]
+            {
+                \Delta; R 
+                \vdash_\Lambda 
+                \mu : M
+            }
+            {\Delta(\mu) = M}
+        \\
+    \end{array}
+\end{equation*}

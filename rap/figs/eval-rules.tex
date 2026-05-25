@@ -1,0 +1,27 @@
+\begin{equation*}
+    \begin{array}{c}
+    \infer[(\text{eval-add})]
+        {(ic, \mathcal R) \rightarrow_P (ic + 1, \mathcal R[r_d = i + j])}
+        {J(ic) = \add\ r_d, r_s, v & \mathcal M(r_s) = i & \mathcal M(v) = j}
+    \\
+    \infer[(\text{eval-incr})]
+        {(ic, \mathcal R) 
+        \rightarrow_P
+        (ic + 1,\mathcal R[r_d = \mu\ \ttop_0 \cons \cdots \cons \ttop_i \cons S])}
+        {J(ic) = \incr\ r_d,\ r_s,\ v &
+            \mathcal M(r_s) = \mu\ S &
+            \mathcal M(v) = i &
+            i > 0
+        }
+    \\
+    \infer[(\text{eval-decr})]
+        {(ic, \mathcal R) 
+        \rightarrow_P
+        (ic + 1,\mathcal R[r_d = \mu\ S])}
+        {J(ic) = \incr\ r_d,\ r_s,\ v &
+            \mathcal M(r_s) = \mu\ \ttop_0 \cons \cdots \cons \ttop_i \cons S &
+            \mathcal M(v) = i &
+            i > 0
+        }
+    \end{array}
+\end{equation*}

@@ -1,0 +1,154 @@
+\begin{equation*}
+    \begin{array}{c}
+        \infer[(\text{type-coerce-var})]
+            {\Delta \models \alpha \leq \alpha \leadsto \Delta}
+            {\alpha \in \dom(\Delta)}
+        \\
+        \infer[(\text{type-coerce-var-int})]
+            {
+                \Delta \models
+                \alpha \leq int 
+                \leadsto \Delta[\alpha \colon int]}
+            {
+                \alpha \not \in \dom(\Delta)
+            }
+        \\
+        \infer[(\text{type-coerce-var-imm})]
+            {
+                \Delta \models
+                \alpha \leq int(i)
+                \leadsto \Delta[\alpha \colon int(i)]}
+            {
+                \alpha \not \in \dom(\Delta)
+            }
+        \\
+        \infer[(\text{type-coerce-var-collection})]
+            {
+                \Delta \models
+                \alpha \leq int 
+                \leadsto \Delta[\alpha \colon int]}
+            {
+                \alpha \not \in \dom(\Delta)
+            }
+        \\
+        \infer[(\text{type-coerce-var-t})]
+            {
+                \Delta \models
+                \alpha \leq \tau
+                \leadsto \Delta}
+            {
+                \Delta(\alpha) = \tau' &
+                \Delta \models \tau \equiv \tau'
+            }
+        \\
+        \infer[(\text{type-coerce-stack-var})]
+            {
+                \Delta \models
+                \rho \leq \rho
+                \leadsto \Delta
+            }
+            {
+                \rho \not \in \dom(\Delta)
+            }
+        \\
+        \infer[(\text{type-coerce-stack-var-empty})]
+            {
+                \Delta \models
+                \rho \leq \emptystack
+                \leadsto \Delta[\rho \colon \emptystack]
+            }
+            {
+                \rho \not \in \dom(\Delta)
+            }
+        \\
+        \infer[(\text{type-coerce-stack-var-cons})]
+            {
+                \Delta \models
+                \rho \leq \tau \cons S
+                \leadsto \Delta[\rho \colon \tau \cons \Delta'(\rho)]
+            }
+            {
+                \rho \not \in \dom(\Delta) &
+                \Delta \models S \leadsto \Delta'
+            }
+        \\
+        \infer[(\text{type-coerce-memory-var})]
+            {\Delta \models \mu \leq \mu \leadsto \Delta}
+            {\mu \in \dom(\Delta)}
+        \\
+        \infer[(\text{type-coerce-memory-var-shared})]
+            {
+                \Delta \models
+                \mu \leq \shared
+                \leadsto \Delta[\mu \colon \shared]}
+            {\mu \not \in \dom(\Delta)}
+        \\
+        \infer[\text{type-coerce-memory-var-scratch}]
+            {
+                \Delta \models
+                \mu \leq \scratch
+                \leadsto \Delta[\mu \colon \scratch]}
+            {\mu \not \in \dom(\Delta)}
+        \\
+        \infer[(\text{type-coerce-top})]
+            {\Delta \models \tau \leq \ttop \leadsto \Delta}
+            {}
+        \\
+        \infer[(\text{type-coerce-int})]
+            {\Delta \models int \leq int \leadsto \Delta}
+            {}
+        \\
+        \infer[(\text{type-coerce-stack})]
+            {
+                \Delta \models
+                \tau_1^l \cons \cdots \cons \tau_n^l \cons S
+                \equiv
+                \tau_1^r \cons \cdots \cons \tau_n^r \cons S'
+                \leadsto \Delta
+            }
+            {
+                \Delta \models \tau_1^l \equiv \tau_1^r &
+                \cdots &
+                \Delta \models \tau_n^l \equiv \tau_n^r
+            }
+        \\
+        \infer[(\text{type-coerce-array})]
+            {
+                \Delta \models
+                \tau\ array(i)
+                \leq
+                \tau'\ array(j)
+                \leadsto \Delta
+            }
+            {
+                \Delta \models \tau\ array(i) \equiv \tau'\ array(j)
+            }
+        \\
+        \infer[(\text{type-coerce-array-stack})]
+            {
+                \Delta
+                \models
+                \tau\ array(i)
+                \leq
+                \tau_0 \cons \cdots \cons \tau_i \cons S
+            }
+            {
+                \Delta \models \tau \equiv \tau_0 &
+                \cdots &
+                \Delta \models \tau \equiv \tau_i
+            }
+        \\
+        \infer[(\text{type-coerce-collection})]
+            {\Delta \models \mu\ c \leq \mu' c'}
+            {\Delta \models \mu \equiv \mu' &
+            \Delta \models c \leq c'}
+        \\
+        \infer[type-coerce-regfile]
+            {\Delta; R \models_c R' \leadsto \Delta_n}
+            {
+                \Delta; R \vdash r_n : \tau_n &
+                \Delta_{n - 1}; R' \vdash r_n : \tau'_n &
+                \Delta_{n - 1} \models \tau'_n \leq \tau_n \leadsto \Delta_n
+            }
+    \end{array}
+\end{equation*}

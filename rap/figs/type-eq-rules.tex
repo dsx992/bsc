@@ -1,0 +1,53 @@
+\begin{equation*}
+    \begin{array}{c}
+        \infer[(\text{type-eq-var})]
+            {\Delta \models \alpha \equiv \alpha}
+            {\alpha \in \Delta}
+        \\
+        \infer[(\text{type-eq-top})]
+            {\Delta \models \ttop \equiv \ttop}
+            {}
+        \\
+        \infer[(\text{type-eq-int})]
+            {\Delta \models int \equiv int}
+            {}
+        \\
+        \infer[(\text{type-eq-stack})]
+            {\Delta
+            \models
+            \tau_0^l \cons \cdots \cons \tau_n^l \cons \emptystack
+            \equiv
+            \tau_0^r \cons \cdots \cons \tau_n^r \cons \emptystack}
+            {\Delta \models \tau_0^l \equiv \tau_0^r &
+            \cdots &
+            \Delta \models \tau_n^l \equiv \tau_n^r
+            }
+        \\
+        \infer[(\text{type-eq-array})]
+            {\Delta
+            \models
+            \tau\ array(i)
+            \equiv
+            \tau'\ array(j)}
+            {\Delta \models \tau \equiv \tau' &
+            i = j}
+        \\
+        \infer[(\text{region-eq-scratch})]
+            {\Delta \models \scratch \equiv \scratch}
+            {}
+        \\
+        \infer[(\text{region-eq-shared})]
+            {\Delta \models \shared \equiv \shared}
+            {}
+        \\
+        \infer[(\text{type-eq-collection})]
+            {\Delta
+            \models
+            \mu\ c
+            \equiv
+            \mu'\ c'}
+            {\Delta \models \mu \equiv \mu' &
+            \Delta \models c \equiv c' }
+        \\
+    \end{array}
+\end{equation*}
