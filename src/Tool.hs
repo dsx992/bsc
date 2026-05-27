@@ -1,4 +1,4 @@
-module Tool(eval, flattenRF) where
+module Tool(eval, trace, decorate) where
 
 import Syntax
 -- import Coercion
@@ -6,12 +6,13 @@ import Result
 import Data.List
 import Data.Foldable
 import Data.Maybe
+import Control.Applicative (Applicative(liftA2))
 
 {- EVAL
  - eval takes in a wrapped program with meta data,
  - finds the entrypoint start,
  - traces the program path through jumps,
- - instantias typevariable contexts,
+ - Instantiates and decorates with typevariable contexts,
  -      by flattening the current block to remove type variables
  -      and coercing the next block regfile
  -      (producing the context as a side effect)
@@ -20,20 +21,10 @@ import Data.Maybe
 
 type DecoratedP = [(Label, Block, TypeVarContext)]
 
+type Block' = (TypeVarContext, Block)
+
 registers :: [Register]
 registers = [Zero ..]
-
-lookupTD :: TypeVar -> TypeVarContext -> Maybe Type
-lookupTD x (TypeVarContext {alpha = as}) =
-    snd <$> find ((== x) . fst) as
-
-lookupMD :: MemTypeVar -> TypeVarContext -> Maybe MemType
-lookupMD x (TypeVarContext {mem = mus}) =
-    snd <$> find ((== x) . fst) mus
-
-lookupSD :: StackTypeVar -> TypeVarContext -> Maybe StackType
-lookupSD x (TypeVarContext {stack = rhos}) =
-    snd <$> find ((== x) . fst) rhos
 
 -- | replaces variables with their bindings. R[Δ]
 flattenRF :: RegFile -> TypeVarContext -> Maybe RegFile
@@ -42,12 +33,12 @@ flattenRF rf delta =
         pairs   = zip registers <$> mts
     in  torf <$> pairs
     where
-        torf :: [(Register, Type)] -> Register -> Type
+        torf :: [(Register, AType)] -> Register -> AType
         torf ((r', t):tail) r =
             if r == r' then t
             else torf tail r
 
-        flattenT :: Type -> Maybe Type
+        flattenT :: AType -> Maybe AType
         flattenT (TVar a)           = a `lookupTD` delta
         flattenT (TCollection c)    = TCollection <$> flattenC c
         flattenT t                  = Just t
@@ -101,44 +92,35 @@ eval m = undefined
 
 
 -- | trace find the execution path starting at entry
-trace :: Program -> Label -> [Block]
+trace :: Program -> Label -> Maybe [Block]
 -- 1. find entry
 -- 2. get instructions in block
 -- 3. find next label (jump)
 -- 4. basecase if no label
 -- 5. else trace next and concat
 trace prog entry =
-        let mblock  = snd <$> find ((== entry) . fst) prog
-            minsns  = (\ (Block (_, insns)) -> insns) <$> mblock
-            mnext   = minsns >>= next
-            mtail   = trace prog <$> mnext :: Maybe [Block]
-        in
-            fromMaybe [] $ ((:) <$> mblock) <*> mtail
+    do
+        block@(Block (_, insns)) <- snd <$> find ((entry ==) . fst) prog
+        -- let tail = fromMaybe [] (next insns >>= trace prog)
+        -- return $ block : tail
+        case next insns >>= trace prog of
+            Just tail   -> return $ block : tail
+            Nothing     -> return [block]
 
     where
         next :: InstructionSeq -> Maybe Label
-        next (insn `ICons` insns)   = next insns
-        next (Jump (Label label))   = Just label
-        next Halt                   = Nothing
-
-        cat :: [Block] -> Block -> Maybe [Block]
-        cat bs b = Just $ b : bs
+        next (insn `ICons` insns)      = next insns
+        next (Jump (Label label))      = Just label
+        next Halt                      = Nothing
 
 
--- decorate :: Program -> Label -> DecoratedP
--- decorate prog entry =
---     decorate' defaultRegFile prog entry
---     where
---         decorate' :: RegFile -> Program -> Label -> DecoratedP
---         decorate' rf prog entry =
---             let b@(Block (rf', _)) = fst $ find ((==) entry . fst) prog
---                 pairs   = [(rf r, rf' r) | r <- registers]
---                 folder  = (\delta (r, r') -> coerce delta r' r)
---                 delta   = foldl folder [] $ pairs
-
-
--- top i x =
---     let evalI (Aop _ _ _) = x
---     in evalI i
--- 
-
+decorate :: [Block] -> Maybe [Block']
+decorate (b:b':bs) =
+    let Block (rf, _) = b
+        Block (rf', _) = b'
+    in
+        undefined
+    where
+        -- | creates a new context by coercing
+        instantiateD :: RegFile -> RegFile -> Maybe TypeVarContext
+        instantiateD rf rf' = undefined

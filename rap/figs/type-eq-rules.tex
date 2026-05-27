@@ -13,15 +13,24 @@
             {}
         \\
         \infer[(\text{type-eq-stack})]
-            {\Delta
-            \models
-            \tau_0^l \cons \cdots \cons \tau_n^l \cons \emptystack
-            \equiv
-            \tau_0^r \cons \cdots \cons \tau_n^r \cons \emptystack}
-            {\Delta \models \tau_0^l \equiv \tau_0^r &
-            \cdots &
-            \Delta \models \tau_n^l \equiv \tau_n^r
+            {
+                \Delta
+                \models
+                \tau \cons S
+                \equiv
+                \tau' \cons S'
             }
+            {
+                \Delta \models \tau \equiv \tau' &
+                \Delta \models S \equiv S'
+            }
+        \\
+        \infer[(\text{type-eq-emptystack})]
+            {
+                \Delta \models
+                \emptystack \equiv \emptystack
+            }
+            { }
         \\
         \infer[(\text{type-eq-array})]
             {\Delta
