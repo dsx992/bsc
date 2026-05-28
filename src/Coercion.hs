@@ -2,26 +2,76 @@ module Coercion where
 
 import Syntax
 import Data.Maybe
+import Data.List
 
--- | Using Maybes as a form of backtracking
+-- | Using Maybes as a form of backtracking,
+-- but since contexts are shallow, there is not a lot to do
+
+instance TypeCo RegFile where
+    -- coerce .tv r_1 r_1' ~> Δ_1
+    coerce delta rf rf' =
+        foldl folder (Just )
+        where
+            folder :: Maybe TypeVarContext -> Register -> Maybe TypeVarContext
+            folder delta r =
+                mdelta >>= \delta -> coerce delta (rf r) (rf' r)
+            registers = [Zero ..]
+
+
+
 
 instance TypeCo Type where
-    coerce delta ta@(TVar a) ta'@(TVar a') =
-        if equiv delta ta ta' then
-            Just delta
-        else
-            Nothing
-    coerce delta (TVar a) TInt =
-        if not $ a `indom` delta then
-            Just $ updateTD delta a TInt
-        else
-            Nothing
+    -- coerce delta ta@(TVar a) ta'@(TVar a')
+    --     | equiv delta ta ta'    = Just delta
+    --     | otherwise             = Nothing
+    coerce delta (TVar a) Top
+        | not $ a `indom` delta = Just $ updateTD delta a Top
+        | otherwise             = Nothing
+    coerce delta (TVar a) TInt
+        | not $ a `indom` delta = Just $ updateTD delta a TInt
+        | otherwise             = Nothing
     coerce delta ta@(TVar a) t@(TDInt i) =
         updateTD delta a t <$ coerce delta ta TInt
     coerce delta (TVar a) c@(TCollection _)
         | not $ a `indom` delta = Just $ updateTD delta a c
         | a `indom` delta       = Nothing
-    coerce delta (TVar a) t = undefined
+    coerce delta (TVar a) t
+        | Just t' <- a `lookupTD` delta
+        , equiv delta t t'
+        = Just delta
+        | otherwise
+        = Nothing
+    coerce delta t t'
+        | equiv delta t t'  = Just delta
+        | otherwise         = Nothing
+
+instance TypeCo StackType where
+    coerce delta ts@(SVar rho) ts'@(SVar _)
+        | equiv delta ts ts'    = Just delta
+        | otherwise             = Nothing
+    coerce delta (SVar rho) SEmpty
+        | not $ rho `indom` delta   = Just $ updateSD delta rho SEmpty
+        | otherwise                 = Nothing
+    coerce delta sv@(SVar rho) (t `SCons` s)
+        | not $ rho `indom` delta =
+            do
+                delta'  <- coerce delta sv s
+                s'      <- rho `lookupSD` delta'
+                return $ updateSD delta rho (t `SCons` s')
+        | otherwise = Nothing
+
+instance TypeCo MemType where
+    coerce delta (MVar mu) (MVar mu')
+        | mu `indom` delta , mu == mu' = Just delta
+        | otherwise = Nothing
+    coerce delta (MVar mu) Scratch
+        | not $ mu `indom` delta = Just $ updateMD delta mu Scratch
+        | otherwise = Nothing
+    coerce delta (MVar mu) Shared
+        | not $ mu `indom` delta = Just $ updateMD delta mu Shared
+        | otherwise = Nothing
+    coerce delta Scratch Scratch = Just delta
+    coerce delta Shared Shared = Just delta
 
 instance TypeEq Type where
     equiv delta (TVar a) (TVar a') =
@@ -61,17 +111,25 @@ updateTD :: TypeVarContext -> TypeVar -> Type -> TypeVarContext
 updateTD delta@(TypeVarContext { alpha = as}) a t =
         delta { alpha = (a, t) : as }
 
+updateSD :: TypeVarContext -> StackTypeVar -> StackType -> TypeVarContext
+updateSD delta@(TypeVarContext { stack = ss}) s t =
+        delta { stack = (s, t) : ss }
+
+updateMD :: TypeVarContext -> MemTypeVar -> MemType -> TypeVarContext
+updateMD delta@(TypeVarContext { mem = ms}) m t =
+        delta { mem = (m, t) : ms }
+
 instance ContextVar TypeVar where
-    indom t delta = isJust $ t `lookup` delta
-    lookup (TypeVarContext {alpha = as}) x =
-        snd <$> find ((== x) . fst) as
+    indom a (TypeVarContext {alpha = as}) = isJust $ a `lookup` as
+    -- lookupT x (TypeVarContext {alpha = as}) =
+    --     snd <$> find ((== x) . fst) as
 
 instance ContextVar MemTypeVar where
-    indom m delta = isJust $ m `lookup` delta
-    lookup (TypeVarContext {mem = mus}) x =
-        snd <$> find ((== x) . fst) mus
+    indom m (TypeVarContext {mem = ms}) = isJust $ m `lookup` ms
+    -- lookupT x (TypeVarContext {mem = mus}) =
+    --     snd <$> find ((== x) . fst) mus
 
 instance ContextVar StackTypeVar where
-    indom s delta = isJust $ s `lookup` delta
-    lookup (TypeVarContext {alpha = rhos}) x =
-        snd <$> find ((== x) . fst) rhos
+    indom s (TypeVarContext {stack = ss}) = isJust $ s `lookup` ss
+    -- lookupT x (TypeVarContext {alpha = rhos}) =
+    --     snd <$> find ((== x) . fst) rhos

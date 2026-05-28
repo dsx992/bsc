@@ -69,7 +69,8 @@
             }
             {
                 \rho \not \in \dom(\Delta) &
-                \Delta \models S \leadsto \Delta'
+                \emptytv \models \alpha \leq 
+                \Delta \models \rho \leq S \leadsto \Delta'
             }
         \\
         \infer[(\text{type-coerce-memory-var})]
@@ -92,7 +93,7 @@
         \\
         \infer[(\text{type-coerce-top})]
             {\Delta \models \tau \leq \ttop \leadsto \Delta}
-            {}
+            {\tau \not \in \dom(\Delta)}
         \\
         \infer[(\text{type-coerce-int})]
             {\Delta \models int \leq int \leadsto \Delta}
@@ -143,7 +144,7 @@
             {\Delta \models \mu \equiv \mu' &
             \Delta \models c \leq c'}
         \\
-        \infer[type-coerce-regfile]
+        \infer[(\text{type-coerce-regfile})]
             {\Delta; R \models_c R' \leadsto \Delta_n}
             {
                 \Delta; R \vdash r_n : \tau_n &

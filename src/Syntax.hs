@@ -108,5 +108,4 @@ class TypeEq t => TypeCo t where
 
 class ContextVar a where
     indom :: a -> TypeVarContext -> Bool
-    lookup  :: TypeEq t => TypeVarContext -> a -> Maybe t
-
+    -- lookupT  :: TypeEq t => a -> TypeVarContext -> Maybe t
