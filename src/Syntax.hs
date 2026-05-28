@@ -33,31 +33,27 @@ data Register = Zero | Ra | Sp | Gp | Tp | T0 | T1 | T2 | Fp | S1 | A0 | A1 | A2
 
 data TypeVarContext =
     TypeVarContext
-    { alpha :: [(TypeVar, AType)]
+    { alpha :: [(TypeVar, Type)]
     , mem   :: [(MemTypeVar, MemType)]
     , stack :: [(StackTypeVar, StackType)]
     }
     deriving (Show)
 
--- [(TypeVar, AType)]
+-- [(TypeVar, Type)]
 
-type RegFile = (Register -> AType)
+type RegFile = (Register -> Type)
 
-class Type t where
-    equiv       :: TypeVarContext -> t -> t -> Bool
-    coercion    :: TypeVarContext -> t -> t -> Maybe TypeVarContext
-
-data AType = TVar TypeVar | Top | TInt | TDInt Int | TCollection CollectionType
+data Type = TVar TypeVar | Top | TInt | TDInt Int | TCollection CollectionType
     deriving (Show)
 
-data StackType = SEmpty | SVar StackTypeVar | AType `SCons` StackType
+data StackType = SEmpty | SVar StackTypeVar | Type `SCons` StackType
     deriving (Show)
 
 data MemType = Scratch | Shared | MVar MemTypeVar
     deriving (Show)
 
 data CollectionType
-    = Array MemType AType Int
+    = Array MemType Type Int
     | CStack MemType StackType
     deriving (Show)
 type Label = String
@@ -92,7 +88,7 @@ type Meta = (Info, Program)
 instance Show RegFile where
     show rf = show $ map rf [Zero ..]
 
-lookupTD :: TypeVar -> TypeVarContext -> Maybe AType
+lookupTD :: TypeVar -> TypeVarContext -> Maybe Type
 lookupTD x (TypeVarContext {alpha = as}) =
     snd <$> find ((== x) . fst) as
 
@@ -103,3 +99,14 @@ lookupMD x (TypeVarContext {mem = mus}) =
 lookupSD :: StackTypeVar -> TypeVarContext -> Maybe StackType
 lookupSD x (TypeVarContext {stack = rhos}) =
     snd <$> find ((== x) . fst) rhos
+
+class TypeEq t where
+    equiv :: TypeVarContext -> t -> t -> Bool
+
+class TypeEq t => TypeCo t where
+    coerce :: TypeVarContext -> t -> t -> Maybe TypeVarContext
+
+class ContextVar a where
+    indom :: a -> TypeVarContext -> Bool
+    lookup  :: TypeEq t => TypeVarContext -> a -> Maybe t
+

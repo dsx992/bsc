@@ -13,7 +13,7 @@
                 \alpha \not \in \dom(\Delta)
             }
         \\
-        \infer[(\text{type-coerce-var-imm})]
+        \infer[(\text{type-coerce-var-t})]
             {
                 \Delta \models
                 \alpha \leq int(i)
@@ -25,8 +25,8 @@
         \infer[(\text{type-coerce-var-collection})]
             {
                 \Delta \models
-                \alpha \leq int 
-                \leadsto \Delta[\alpha \colon int]}
+                \alpha \leq C
+                \leadsto \Delta[\alpha \colon C]}
             {
                 \alpha \not \in \dom(\Delta)
             }

@@ -33,12 +33,12 @@ flattenRF rf delta =
         pairs   = zip registers <$> mts
     in  torf <$> pairs
     where
-        torf :: [(Register, AType)] -> Register -> AType
+        torf :: [(Register, Type)] -> Register -> Type
         torf ((r', t):tail) r =
             if r == r' then t
             else torf tail r
 
-        flattenT :: AType -> Maybe AType
+        flattenT :: Type -> Maybe Type
         flattenT (TVar a)           = a `lookupTD` delta
         flattenT (TCollection c)    = TCollection <$> flattenC c
         flattenT t                  = Just t
