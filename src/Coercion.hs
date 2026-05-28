@@ -1,24 +1,52 @@
 module Coercion where
 
 import Syntax
+import Flatten
 import Data.Maybe
 import Data.List
+import Debug.Trace
 
 -- | Using Maybes as a form of backtracking,
 -- but since contexts are shallow, there is not a lot to do
 
+debug :: Show a => a -> a
+debug a = Debug.Trace.traceShow a a
+
 instance TypeCo RegFile where
-    -- coerce .tv r_1 r_1' ~> Δ_1
-    coerce delta rf rf' =
-        foldl folder (Just )
+    -- rf' < rf
+    coerce delta rf' rf =
+        foldl folder (Just emptyctx) registers
         where
             folder :: Maybe TypeVarContext -> Register -> Maybe TypeVarContext
-            folder delta r =
-                mdelta >>= \delta -> coerce delta (rf r) (rf' r)
+            folder mdelta' r =
+                Debug.Trace.trace 
+                    ( "mdelta': " ++ show mdelta' ++ "\n"
+                    ++ "rf r: " ++ show (rf r) ++ "\n"
+                    ++ "rf' r: " ++ show (rf' r) ++ "\n"
+                    ++ "flatten delta $ rf r: "
+                    ++ show (flatten delta $ rf r) ++ "\n"
+                    )
+                    (do
+                        t <- Debug.Trace.trace
+                                ( "t: " ++ show (flatten delta $ rf r))
+                                flatten delta $ rf r
+                        Debug.Trace.trace 
+                            ( "mdelta' >>= \\d -> coerce d (rf' r) t:" 
+                            ++show (mdelta' >>= \d -> coerce d (rf' r) t) ++ "\n"
+                            ++"where" ++ "\n"
+                            ++"\tdelta: " ++ show delta ++ "\n"
+                            ++"\tt: " ++ show t ++ "\n"
+                            ++"\t(rf' r): " ++ show (rf' r) ++ "\n"
+                            )
+                            mdelta' >>= \d -> coerce d (rf' r) t
+                    )
+                
             registers = [Zero ..]
+            emptyctx = TypeVarContext {alpha = [], mem = [], stack = []}
 
-
-
+instance TypeEq RegFile where
+    equiv delta rf rf' =
+        and [equiv delta (rf r) (rf' r) | r <- [Zero ..]]
 
 instance TypeCo Type where
     -- coerce delta ta@(TVar a) ta'@(TVar a')
