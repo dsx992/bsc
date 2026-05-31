@@ -13,7 +13,7 @@
                 \alpha \not \in \dom(\Delta)
             }
         \\
-        \infer[(\text{type-coerce-var-t})]
+        \infer[(\text{type-coerce-var-imm})]
             {
                 \Delta \models
                 \alpha \leq int(i)
@@ -102,15 +102,14 @@
         \infer[(\text{type-coerce-stack})]
             {
                 \Delta \models
-                \tau_1^l \cons \cdots \cons \tau_n^l \cons S
-                \equiv
-                \tau_1^r \cons \cdots \cons \tau_n^r \cons S'
-                \leadsto \Delta
+                \tau \cons S
+                \leq
+                \tau' \cons S'
+                \leadsto \Delta''
             }
             {
-                \Delta \models \tau_1^l \equiv \tau_1^r &
-                \cdots &
-                \Delta \models \tau_n^l \equiv \tau_n^r
+                \Delta \models s \leq s' \leadsto \Delta' &
+                \Delta' \models \tau \leq \tau' \leadsto \Delta''
             }
         \\
         \infer[(\text{type-coerce-array})]
@@ -119,10 +118,11 @@
                 \tau\ array(i)
                 \leq
                 \tau'\ array(j)
-                \leadsto \Delta
+                \leadsto \Delta'
             }
             {
-                \Delta \models \tau\ array(i) \equiv \tau'\ array(j)
+                \Delta \models \tau \leq \tau' \leadsto \Delta' &
+                i \leq j
             }
         \\
         \infer[(\text{type-coerce-array-stack})]
@@ -140,9 +140,11 @@
             }
         \\
         \infer[(\text{type-coerce-collection})]
-            {\Delta \models \mu\ c \leq \mu' c'}
-            {\Delta \models \mu \equiv \mu' &
-            \Delta \models c \leq c'}
+            {\Delta \models \mu\ c \leq \mu' c' \leadsto \Delta''}
+            {
+                \Delta \models \mu \leq \mu' \leadsto \Delta' &
+                \Delta' \models c \leq c' \leadsto \Delta''
+            }
         \\
         \infer[(\text{type-coerce-regfile})]
             {\Delta; R \models_c R' \leadsto \Delta_n}

@@ -1,12 +1,48 @@
 module Flatten where
 
 import Syntax
+import Data.List
+import Data.Maybe
 
 registers :: [Register]
 registers = [Zero ..]
 
 class Flatten a where
     flatten :: TypeVarContext -> a -> Maybe a
+
+instance Flatten Block where
+    flatten delta (Block (rf, insns)) =
+    --     -- lookup r [ do {t <- rf r; return (r, t)} | r <- [Zero ..] ]
+        -- let pairs = 
+        --         mapM
+        --             (\r -> do {t <- flatten delta $ rf r; return (r, t)})
+        --             [Zero ..]
+        --     rf' = (\ ps r -> r `lookup` ps) <$> pairs
+        -- in
+        --     rf' >>= (\rf -> Just $ Block (rf, insns))
+
+        -- let pairs = mapM moveM $ zip regs (flatrf <$> regs)
+        --     rf' = 
+        do
+            pairs <- mapM moveM $ zip regs (flatrf <$> regs)
+            let rf' = fromMaybe Top . (`lookup` pairs)
+            return $ Block (rf', insns)
+
+        -- do
+        --     pairs <-
+        --         mapM
+        --             (\r -> do {t <- flatten delta $ rf r; return (r, t)})
+        --             [Zero ..]
+        --     rf' <- (`lookup` pairs)
+        --     return $ Block (rf', insns)
+        where
+            regs = [Zero ..]
+            flatrf = flatten delta . rf
+            moveM :: Monad m =>  (a, m b) -> m (a, b)
+            moveM (a, mb) =
+                do
+                    b <- mb
+                    return (a, b)
 
 instance Flatten Type where
     flatten delta (TVar a)           = a `lookupTD` delta

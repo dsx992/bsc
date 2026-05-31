@@ -45,5 +45,57 @@
                 \Delta; R \models_c R' \leadsto \Delta'
             }
         \\
+        \infer[(\text{type-load-array})]
+            {\Delta; R \vdash \load\ r_d,\ v(r_s); I}
+            {
+                \Delta; R \vdash v : int(i) &
+                \Delta; R \vdash r_s \colon M \tau array(j) &
+                i < j &
+                \Delta; R[r_d = \tau] \vdash I
+            }
+        \\
+        \infer[(\text{type-load-stack})]
+            {\Delta; R \vdash \load\ r_d,\ v(r_s); I}
+            {
+                \Delta; R \vdash v : int(i) &
+                i \geq 0 &
+                \Delta; R \vdash r_s \colon M \tau_0 \cons \cdots \cons \tau_i \cons S &
+                \Delta; R[r_d = \tau_i] \vdash I
+            }
+        \\
+        \infer[(\text{type-store-array})]
+            {\Delta; R \vdash \store\ r_s,\ v(r_d); I}
+            {
+                \Delta; R \vdash v : int(i) &
+                \Delta; R \vdash r_s \colon \tau &
+                \Delta; R \vdash r_d \colon M \tau' array(j) &
+                i < j &
+                \Delta \models \tau' \leq \tau
+                \Delta; R \vdash I
+            }
+        \\
+        \infer[(\text{type-store-stack})]
+            {\Delta; R \vdash \store\ r_s,\ v(r_d); I}
+            {
+                \deduce
+                    {
+                        \deduce
+                            {}
+                            {
+                                \Delta; R \vdash v : int(i) &
+                                i \geq 0 &
+                                \Delta; R
+                                \vdash r_d \colon M\ \tau_0
+                                \cons \cdots \cons \tau_i \cons S &
+                            }
+                    }
+                    {
+                        \Delta; R \vdash r_s \colon \tau &
+                        \Delta \models \tau' \leq \tau &
+                        \Delta; R[r_d = M\ \tau_0 \cons
+                        \cdots \cons \tau \cons S] \vdash I
+                    }
+            }
+        \\
     \end{array}
 \end{equation*}

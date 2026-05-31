@@ -40,6 +40,8 @@
                                 &       & \mid& \halt \\
                                 &       & \mid& \mvscratch\ r_d \\
                                 &       & \mid& \mvshared\ r_d \\
+                                &       & \mid& \load\ r_d,\ i(r_s) \\
+                                &       & \mid& \store\ r_s,\ i(r_d) \\
         \text{arithmetic operations}    & aop   & ::= & \add \mid \sub 
                                             \mid \mul \mid \ddiv \\
         \text{instruction sequences}    & I     & ::= & 

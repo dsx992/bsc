@@ -9,9 +9,6 @@ import Debug.Trace
 -- | Using Maybes as a form of backtracking,
 -- but since contexts are shallow, there is not a lot to do
 
-debug :: Show a => a -> a
-debug a = Debug.Trace.traceShow a a
-
 instance TypeCo RegFile where
     -- rf' < rf
     coerce delta rf' rf =
@@ -19,27 +16,9 @@ instance TypeCo RegFile where
         where
             folder :: Maybe TypeVarContext -> Register -> Maybe TypeVarContext
             folder mdelta' r =
-                Debug.Trace.trace 
-                    ( "mdelta': " ++ show mdelta' ++ "\n"
-                    ++ "rf r: " ++ show (rf r) ++ "\n"
-                    ++ "rf' r: " ++ show (rf' r) ++ "\n"
-                    ++ "flatten delta $ rf r: "
-                    ++ show (flatten delta $ rf r) ++ "\n"
-                    )
-                    (do
-                        t <- Debug.Trace.trace
-                                ( "t: " ++ show (flatten delta $ rf r))
-                                flatten delta $ rf r
-                        Debug.Trace.trace 
-                            ( "mdelta' >>= \\d -> coerce d (rf' r) t:" 
-                            ++show (mdelta' >>= \d -> coerce d (rf' r) t) ++ "\n"
-                            ++"where" ++ "\n"
-                            ++"\tdelta: " ++ show delta ++ "\n"
-                            ++"\tt: " ++ show t ++ "\n"
-                            ++"\t(rf' r): " ++ show (rf' r) ++ "\n"
-                            )
-                            mdelta' >>= \d -> coerce d (rf' r) t
-                    )
+                do
+                    t <- flatten delta $ rf r
+                    mdelta' >>= \d -> coerce d (rf' r) t
                 
             registers = [Zero ..]
             emptyctx = TypeVarContext {alpha = [], mem = [], stack = []}
@@ -69,9 +48,31 @@ instance TypeCo Type where
         = Just delta
         | otherwise
         = Nothing
+    coerce delta (TCollection c) (TCollection c') =
+        coerce delta c c'
+    coerce delta _ Top      = Just delta
     coerce delta t t'
         | equiv delta t t'  = Just delta
         | otherwise         = Nothing
+
+instance TypeCo CollectionType where
+    coerce delta (CStack m s) (CStack m' s') =
+        coerce delta m m' >>= \d  -> coerce d s s'
+    coerce delta (Array m t i) (Array m' t' j) =
+        do
+            delta'  <- coerce delta m m'
+            delta'' <- coerce delta' t t'
+            if i <= j then
+                return delta''
+            else
+                Nothing
+    coerce delta (Array m _ 0) (CStack m' SEmpty) =
+        coerce delta m m'
+    coerce delta (Array m t i) (CStack m' (t' `SCons` s)) =
+        do
+            delta'  <- coerce delta m m'
+            delta'' <- coerce delta' t t'
+            coerce delta'' (Array m t (i - 1)) (CStack m' s)
 
 instance TypeCo StackType where
     coerce delta ts@(SVar rho) ts'@(SVar _)
@@ -87,6 +88,9 @@ instance TypeCo StackType where
                 s'      <- rho `lookupSD` delta'
                 return $ updateSD delta rho (t `SCons` s')
         | otherwise = Nothing
+    coerce delta s s'
+        | equiv delta s s'  = Just delta
+        | otherwise         = Nothing
 
 instance TypeCo MemType where
     coerce delta (MVar mu) (MVar mu')
@@ -94,9 +98,11 @@ instance TypeCo MemType where
         | otherwise = Nothing
     coerce delta (MVar mu) Scratch
         | not $ mu `indom` delta = Just $ updateMD delta mu Scratch
+        | Just Scratch <- mu `lookupMD` delta = Just delta
         | otherwise = Nothing
     coerce delta (MVar mu) Shared
         | not $ mu `indom` delta = Just $ updateMD delta mu Shared
+        | Just Shared <- mu `lookupMD` delta = Just delta
         | otherwise = Nothing
     coerce delta Scratch Scratch = Just delta
     coerce delta Shared Shared = Just delta

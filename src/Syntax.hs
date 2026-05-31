@@ -43,7 +43,12 @@ data TypeVarContext =
 
 type RegFile = (Register -> Type)
 
-data Type = TVar TypeVar | Top | TInt | TDInt Int | TCollection CollectionType
+data Type 
+    = TVar TypeVar
+    | Top
+    | TInt
+    | TDInt Int
+    | TCollection CollectionType
     deriving (Show)
 
 data StackType = SEmpty | SVar StackTypeVar | Type `SCons` StackType
@@ -65,15 +70,19 @@ data Instruction = Aop Register Register Value
                  | Incr Register Register Value
                  | Decr Register Register Value
                  | Mv Register Register
-                 -- | Jump Value
-                 -- | Halt
-                 | Store Register Register Value
+                 | Jump Value
+                 | Halt
                  | Load Register Register Value
+                 | Store Register Register Value
                  | Mvscr Register
                  | Mvshr Register
     deriving (Show)
-data InstructionSeq = Halt | Jump Value |  Instruction `ICons` InstructionSeq
-    deriving (Show)
+-- data InstructionTerminal = Jump Value | Halt
+--     deriving (Show)
+type InstructionSeq = [Instruction]
+    -- =  Instruction `ICons` InstructionSeq
+    -- | Terminal InstructionTerminal
+    -- deriving (Show)
 newtype StateType = StateType (TypeVarContext, RegFile)
 newtype Block = Block (RegFile, InstructionSeq)
     deriving (Show)
@@ -82,8 +91,14 @@ type Program = [(Label, Block)]
 data Info = Info { scratch      :: Integer
                  , shared       :: Integer
                  , arithmetic   :: Integer
-                 , entrypoint   :: Label }
+                 , scratchT     :: CollectionType
+                 , sharedT      :: CollectionType
+                 , entrypoint   :: Label
+                 }
+    deriving (Show)
 type Meta = (Info, Program)
+
+type Block' = [(RegFile, Instruction)]
 
 instance Show RegFile where
     show rf = show $ map rf [Zero ..]

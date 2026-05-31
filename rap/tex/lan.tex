@@ -598,50 +598,12 @@ An example program could look like figure \ref{code:mtal}
 
 \subsection{Code Generation}
 \begin{figure}
-    \begin{equation*}
-        \begin{array}{lcl}
-            \incr\ r_d,\ r_s,\ v
-            & \mapsto
-            & \left\{
-                \begin{array}{lcl}
-                    \begin{array}{llll}
-                        \mul, \quad    & r_d,\ & v,\   & wordsize \\
-                        \sub,           & r_d,  & r_s,  & rd
-                    \end{array}
-                    & \text{iff}
-                    & \Phi; \Delta; R \vdash v : \text{is register}
-                    \\
-                    \\
-                    \begin{array}{llll}
-                        \subi, \quad    & r_d,  & r_s,  & v \cdot wordsize
-                    \end{array}
-                    & \text{iff}
-                    & \Phi; \Delta; R \vdash v : \text{is immediate value}
-                \end{array}
-            \right.
-            \\
-            \\
-            \decr\ r_d,\ r_s,\ v
-            & \mapsto
-            & \left\{
-                \begin{array}{lcl}
-                    \begin{array}{llll}
-                        \mul, \quad    & r_d,\ & v,\   & wordsize \\
-                        \add,           & r_d,  & r_s,  & rd
-                    \end{array}
-                    & \text{iff}
-                    & \Phi; \Delta; R \vdash v : \text{is register}
-                    \\
-                    \\
-                    \begin{array}{llll}
-                        \addi, \quad    & r_d,  & r_s,  & v \cdot wordsize
-                    \end{array}
-                    & \text{iff}
-                    & \Phi; \Delta; R \vdash v : \text{is immediate value}
-                \end{array}
-            \right.
-        \end{array}
-    \end{equation*}
+    \input{figs/codegen-incr-decr}
     \caption{Code generation for \incr and \decr}
     \label{fig:incr-codegen}
+\end{figure}
+
+\begin{figure}
+    \input{figs/codegen}
+    \caption{codegen}
 \end{figure}
