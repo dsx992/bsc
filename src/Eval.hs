@@ -23,7 +23,10 @@ evalB _ _ (Block (rf, [])) = return []
 
 -- eval needs Info to bind the shared and scratch regions.
 evalI :: Info -> TypeVarContext -> RegFile -> Instruction -> Maybe RegFile
-evalI info delta rf (Aop {}) = Just rf
+evalI info delta rf (Add {}) = Just rf
+evalI info delta rf (Sub {}) = Just rf
+evalI info delta rf (Mul {}) = Just rf
+evalI info delta rf (Div {}) = Just rf
 evalI info delta rf (Incr rd rs (VInt i))
     | i >= 0 
     , c@(TCollection (CStack m s)) <- rf rs
@@ -50,11 +53,22 @@ evalI info delta rf (Mv rd rs) =
 evalI info delta rf (Mvscr rd) =
     Just $ bind rf rd (TCollection scrt)
     where
-        Info {scratchT = scrt} = info
+        Info {wordsize = wsz, scratchsize = ssz} = info
+        scrt =
+            let len = fromIntegral $ ssz `div` wsz
+                cons = flip SCons
+                tops = replicate len Top
+            in CStack Scratch $ foldl cons SEmpty tops
+            
 evalI info delta rf (Mvshr rd) =
     Just $ bind rf rd (TCollection shrt)
     where
-        Info {sharedT = shrt} = info
+        Info {wordsize = wsz, sharedsize = ssz} = info
+        shrt =
+            let len = fromIntegral $ ssz `div` wsz
+                cons = flip SCons
+                tops = replicate len Top
+            in CStack Shared $ foldl cons SEmpty tops
 evalI info delta rf (Load rd rs (VInt i))
     | i >= 0
     , (TCollection (Array _ t j)) <- rf rs

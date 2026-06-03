@@ -50,6 +50,7 @@ instance TypeCo Type where
         = Nothing
     coerce delta (TCollection c) (TCollection c') =
         coerce delta c c'
+    coerce delta Top _      = Just delta
     coerce delta _ Top      = Just delta
     coerce delta t t'
         | equiv delta t t'  = Just delta

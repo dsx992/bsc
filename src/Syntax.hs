@@ -3,6 +3,7 @@ module Syntax where
 import Data.List
 import Data.Foldable
 import Data.Maybe
+import Data.Char
 
 class Var a where
     name :: a -> String
@@ -27,7 +28,16 @@ instance Var StackTypeVar where
     newvar = StackTypeVar
 
 data Register = Zero | Ra | Sp | Gp | Tp | T0 | T1 | T2 | Fp | S1 | A0 | A1 | A2 | A3 | A4 | A5 | A6 | A7 | S2 | S3 | S4 | S5 | S6 | S7 | S8 | S9 | S10 | S11 | T3 | T4 | T5 | T6
+
     deriving (Eq, Show, Enum)
+
+instance Read Register where
+    readsPrec _ input
+        | Just r <- map toLower reg `lookup` registers = [(r, rest)]
+        | otherwise  = []
+        where
+            registers = [(map toLower $ show r, r) | r <- [Zero ..]]
+            (reg, rest) = span isAlphaNum input
 
 -- newtype StateType = StateType TypeVarContext RegFile
 
@@ -66,16 +76,20 @@ data Value = VInt Int | Label Label | Reg Register
     deriving (Show)
 
 -- data ArithOp = Add | Sub | Mul | Div
-data Instruction = Aop Register Register Value
-                 | Incr Register Register Value
-                 | Decr Register Register Value
-                 | Mv Register Register
-                 | Jump Value
-                 | Halt
-                 | Load Register Register Value
-                 | Store Register Register Value
-                 | Mvscr Register
-                 | Mvshr Register
+data Instruction
+    = Add Register Register Value
+    | Sub Register Register Value
+    | Mul Register Register Value
+    | Div Register Register Value
+    | Incr Register Register Value
+    | Decr Register Register Value
+    | Mv Register Register
+    | Jump Value
+    | Halt
+    | Load Register Register Value
+    | Store Register Register Value
+    | Mvscr Register
+    | Mvshr Register
     deriving (Show)
 -- data InstructionTerminal = Jump Value | Halt
 --     deriving (Show)
@@ -87,16 +101,18 @@ newtype StateType = StateType (TypeVarContext, RegFile)
 newtype Block = Block (RegFile, InstructionSeq)
     deriving (Show)
 newtype LabelMap = LabelMap (Label -> StateType)
-type Program = [(Label, Block)]
-data Info = Info { scratch      :: Integer
-                 , shared       :: Integer
-                 , arithmetic   :: Integer
-                 , scratchT     :: CollectionType
-                 , sharedT      :: CollectionType
-                 , entrypoint   :: Label
+type Text = [(Label, Block)]
+data Info = Info { wordsize     :: Integer
+                 , scratchaddr  :: Integer
+                 , scratchsize  :: Integer
+                 , scratchtime  :: Integer
+                 , sharedaddr   :: Integer
+                 , sharedsize   :: Integer
+                 , sharedtime   :: Integer
+                 , arittime     :: Integer
                  }
     deriving (Show)
-type Meta = (Info, Program)
+type Program = (Info, Text)
 
 type Block' = [(RegFile, Instruction)]
 

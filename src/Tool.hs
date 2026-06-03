@@ -1,4 +1,4 @@
-module Tool(trace, decorate, tool) where
+module Tool(Tool.trace, decorate, tool) where
 
 import Syntax
 import Coercion
@@ -7,7 +7,7 @@ import Eval
 import Data.List
 import Data.Foldable
 import Data.Maybe
--- import Control.Applicative (Applicative(liftA2))
+import Debug.Trace
 
 {- WCET
  - wcet takes in a wrapped program with meta data,
@@ -21,44 +21,6 @@ import Data.Maybe
  - sums each instruction time based on the meta information and the context
  -}
 
--- type DecoratedP = [(Label, Block, TypeVarContext)]
-
-
--- tool :: Meta -> Maybe Int
--- 
--- tool meta =
---     do
---         path    <- trace prog "_start"
---         path'   <- decorate rf path
--- where
---     Meta (info, prog) = meta
---     rf :: RegFile
---     rf = f
---         where
---             f Zero  = TDInt 0
---             f Sp    = TCollection $ CStack Scratch SEmpty
---             f _     = Top
-
-
--- eval :: Meta -> Integer
--- eval m = undefined
--- eval
---     ( Timing
---         { scratch = scr
---         , shared = shr
---         , arithmetic = arit
---         , entrypoint = entry
---         }
---     , program
---     ) =
---     undefined
-
--- 1. trace program to get path
--- 2. eval each block to get their final regfile (and block')
--- 3. coerce regfiles pairwise, threading the new delta through in a scan,
---    resulting in a [(delta, block)]
---
---
 -- 1. trace program to get path.
 -- 2. get pairwise blocks b and b' and
 -- 3. Flatten b and eval, coercing the last regfile, recursing over all pairs
@@ -68,42 +30,44 @@ import Data.Maybe
 -- [(b, b'), (b', b''), ..] ->
 --      
 
-tool :: Meta -> Maybe Integer
+tool :: Program -> Maybe Integer
 tool (info, prog) =
     do
-        blocks <- trace prog "start"
-        let pairs = zip blocks (tail blocks)
+        blocks <- Tool.trace prog "start"
+        -- append Halt hack such that the last block is calculated (is first in zip tuple)
+        let pairs = zip blocks (tail blocks ++ [Block ((\r -> Top), [Halt])])
         let delta = TypeVarContext [] [] []
         f delta pairs
     where
         f :: TypeVarContext -> [(Block, Block)] -> Maybe Integer
+        f _ [] = Just 0
         f delta ((b, Block (rf, _)) : pairs) =
             do
                 fb <- flatten delta b
                 eb <- evalB info delta fb
                 rf' <- finalrf eb
                 delta' <- coerce delta rf rf'
-                (+) <$> cost delta eb <*> f delta pairs
+                (+) <$> (cost delta eb) <*> f delta' pairs
+
         finalrf :: Block' -> Maybe RegFile
         finalrf ([]) = Nothing
         finalrf ([(rf, _)]) = Just rf
         finalrf (ri : ris) = finalrf ris
+
         cost :: TypeVarContext -> Block' -> Maybe Integer
         cost delta (blocks) = 
             foldl
-                (\mi (rf, insn) ->
+                (\macc (rf, insn) ->
                     (+)
-                    <$> mi
+                    <$> macc
                     <*> costI info delta rf insn
                 )
                 (Just 0)
                 blocks
             -- costI info delta rf insn
-            
-
 
 -- | trace find the execution path starting at entry
-trace :: Program -> Label -> Maybe [Block]
+trace :: Text -> Label -> Maybe [Block]
 -- 1. find entry
 -- 2. get instructions in block
 -- 3. find next label (jump)
@@ -114,7 +78,7 @@ trace prog entry =
         block@(Block (_, insns)) <- snd <$> find ((entry ==) . fst) prog
         -- let tail = fromMaybe [] (next insns >>= trace prog)
         -- return $ block : tail
-        case next insns >>= trace prog of
+        case next insns >>= Tool.trace prog of
             Just tail   -> return $ block : tail
             Nothing     -> return [block]
 
@@ -123,9 +87,6 @@ trace prog entry =
         next ([Jump (Label label)]) = Just label
         next [Halt]                 = Nothing
         next (insn : insns)         = next insns
-
--- type Block' = (TypeVarContext, Block)
--- newtype Block' = Block' (Maybe RegFile, InstructionSeq)
 
 decorate :: Info
     -> TypeVarContext
@@ -146,31 +107,13 @@ decorate info delta (b@(Block(rf, _)) : b'@(Block(rf', _)) : bs) =
         finalrf (b : bs) = finalrf bs
         finalrf ([]) = Nothing
     
--- decorate delta ([]) = Nothing
--- decorate delta (Block (rf, insns) : []) =
---     Just $ Block (flatten delta . rf, insns)
--- decorate delta (Block (rf, insns) : Block (rf', insns') : bs) =
---     do
---         rfF <- flatten delta . rf
---     coerce delta rf' (flatten delta . rf)
-
--- decorate delta (b:bs) =
---     let b' = Just (delta, b)
---     in sequenceA $ scanl f b' bs
---     where
---         -- coerce current block down to next block
---         f :: Maybe Block' -> Block -> Maybe Block'
---         f mb b' =
---             do
---                 (d, b@(Block(rf, _))) <- mb
---                 let (Block(rf', _)) = b'
---                 d' <- coerce d rf' rf
---                 return (d', b')
-
 --  | Calculates the cost of one instruction based on code gen and memory type
 costI :: Info -> TypeVarContext -> RegFile -> Instruction -> Maybe Integer
 costI info delta rf insn
-    | Aop {} <- insn            = Just arit
+    | Add {} <- insn            = Just arit
+    | Sub {} <- insn            = Just arit
+    | Mul {} <- insn            = Just arit
+    | Div {} <- insn            = Just arit
     | Incr _ _ (Reg _) <- insn  = Just $ 2 * arit
     | Incr _ _ (VInt _) <- insn = Just arit
     | Decr _ _ (Reg _) <- insn  = Just $ 2 * arit
@@ -185,7 +128,7 @@ costI info delta rf insn
     | Halt <- insn              = Just 0
 
     where
-        (Info scratch shared arit scratchT sharedT _) = info
+        (Info {scratchtime = scratch, sharedtime = shared, arittime = arit}) = info
 
         costC :: CollectionType -> Maybe Integer
         costC (CStack m _) = Just scratch

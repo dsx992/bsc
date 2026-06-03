@@ -574,27 +574,59 @@ the same register file, in this case the coercion type needs to be equal to the
 type already bound to the type variable in the type variable context.
 
 \subsection{Syntax}
-The syntax for the language is described in figure \ref{syn:my-tal}, which
-takes inspiration from DTAL\cite{xi-dtal}.
-As have been discussed, in a complete language with control-flow, type variables should be reintroduced into index expressions.
-
-An example program could look like figure \ref{code:mtal}
-
-\begin{figure}
-    \begin{lstlisting}[gobble=8]
-        start:  [a0: int, a1: int, a2: int, a3: int]
-                subi    sp, sp, 16      ; sp: scratch top :: top :: top :: top :: 'r
-                mv      a4, sp
-        coerce: ('m)
-                [a0: int, a1: int, a2: int, a3: int, a4: 'm int array(4)]
-                lw      a0, 0(a4)       ; a4: scratch int :: ..
-                lw      a1, 4(a4)       ; a4: scratch int :: int :: ..
-                lw      a2, 8(a4)       ; a4: scratch int :: int :: int ..
-                lw      a3, 12(a4)      ; a4: scratch int :: int :: int :: int :: 'r
-    \end{lstlisting}
-    \caption{Example program}
-    \label{code:mtal}
-\end{figure}
+% The syntax for the language is described in figure \ref{syn:my-tal}, which
+% takes inspiration from DTAL\cite{xi-dtal}.
+% As have been discussed, in a complete language with control-flow, type variables should be reintroduced into index expressions.
+% 
+% An example program could look like figure \ref{code:mtal}
+% 
+% \begin{figure}
+%     \begin{lstlisting}[gobble=8]
+%         start:  [a0: int, a1: int, a2: int, a3: int]
+%                 subi    sp, sp, 16      ; sp: scratch top :: top :: top :: top :: 'r
+%                 mv      a4, sp
+%         coerce: ('m)
+%                 [a0: int, a1: int, a2: int, a3: int, a4: 'm int array(4)]
+%                 lw      a0, 0(a4)       ; a4: scratch int :: ..
+%                 lw      a1, 4(a4)       ; a4: scratch int :: int :: ..
+%                 lw      a2, 8(a4)       ; a4: scratch int :: int :: int ..
+%                 lw      a3, 12(a4)      ; a4: scratch int :: int :: int :: int :: 'r
+%     \end{lstlisting}
+%     \caption{Example program}
+%     \label{code:mtal}
+% \end{figure}
+A sample program could look like
+\begin{lstlisting}
+.meta
+        .wordsize 32
+        .scaddr 0x00010000
+        .scsize 0x00010000
+        .sctime 10
+        .shaddr 0x00080000
+        .shsize 0x10000000
+        .shtime 100
+        .artime 2
+                
+start:
+        []
+        mvscr   t1
+        add     a0, zero, 0
+        add     a1, zero, 1
+        add     a2, zero, 2
+        add     a3, zero, 3
+        j       alloc
+alloc:
+        []
+        incr    a4, sp, 4
+        j       write
+write:
+        [a0 : int, a1 : int, a2 : int, a3 : int, a4: mu int array(4)]
+        store a0, 0(a4)
+        store a1, 1(a4)
+        store a2, 2(a4)
+        store a3, 3(a4)
+        halt
+\end{lstlisting}
 
 \subsection{Code Generation}
 \begin{figure}
