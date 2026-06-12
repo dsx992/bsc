@@ -16,8 +16,8 @@ import Data.Maybe
 evalB :: Info -> TypeVarContext -> Block -> Maybe Block'
 evalB info delta (Block(rf, insn : insns)) =
     do
-        rf' <- (evalI info delta rf insn)
-        ((rf', insn) :) <$> (evalB info delta (Block (rf', insns)))
+        rf' <- evalI info delta rf insn
+        ((rf', insn) :) <$> evalB info delta (Block (rf', insns))
 evalB _ _ (Block (rf, [])) = return []
 -- evalB _ _ (Block (rf,  [Jump _])) = return []
 
@@ -28,7 +28,7 @@ evalI info delta rf (Sub {}) = Just rf
 evalI info delta rf (Mul {}) = Just rf
 evalI info delta rf (Div {}) = Just rf
 evalI info delta rf (Incr rd rs (VInt i))
-    | i >= 0 
+    | i >= 0
     , c@(TCollection (CStack m s)) <- rf rs
     =
         if i == 0 then
@@ -55,17 +55,19 @@ evalI info delta rf (Mvscr rd) =
     where
         Info {wordsize = wsz, scratchsize = ssz} = info
         scrt =
-            let len = fromIntegral $ ssz `div` wsz
+            let len = fromIntegral $ ssz `div` (wsz `div` 8)
                 cons = flip SCons
                 tops = replicate len Top
             in CStack Scratch $ foldl cons SEmpty tops
-            
+
 evalI info delta rf (Mvshr rd) =
     Just $ bind rf rd (TCollection shrt)
     where
         Info {wordsize = wsz, sharedsize = ssz} = info
         shrt =
-            let len = fromIntegral $ ssz `div` wsz
+            -- len in words. wordsize is in bits, so  wordsize / 8 is # bytes
+            -- in a word
+            let len = fromIntegral $ ssz `div` (wsz `div` 8)
                 cons = flip SCons
                 tops = replicate len Top
             in CStack Shared $ foldl cons SEmpty tops

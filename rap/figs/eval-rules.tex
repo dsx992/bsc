@@ -23,5 +23,15 @@
             \mathcal M(v) = i &
             i > 0
         }
+    \\
+    \infer[(\text{eval-mvscratch})]
+        {
+            (ic, \mathcal R) 
+            \rightarrow_P
+            (ic + 1,\mathcal R[r_d = \scratch\ \rho_{scratch}])
+        }
+        {
+            J(ic) = \mvscratch\ r_d
+        }
     \end{array}
 \end{equation*}

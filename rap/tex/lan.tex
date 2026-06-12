@@ -1,17 +1,23 @@
-\section{Getting to a language}\label{sec:lan}
-This section describes the process, the steps, and the considerations for
-designing the risc-v styled typed assembly language suited for static
-worst-case execution time analysis.
-Only a subset of the idea of the language will be fully fleshed out, and an
-even smaller part implemented.
-The \say{full} language requires much too complex typing that involves
-constraint satisfaction of predicate logic, far out of the scope of this
-project, unfortunately.
-\say{The language} refers to the implementation TAL designed for WCET.
-The language syntax is pictured in figure \ref{syn:my-tal}.
-All registers map to $\tau$, except when otherwise noted. The register names
-follow the risc-v ABI names\cite{cod}.
-If a register is not explicitly typed, it will default to \ttop.
+\section{Designing a language}\label{sec:lan}
+This section describes a language suited for the worst-case execution time
+analysis tool presented and described in section \ref{sec:idea-mem}.
+It covers the process and considerations of designing the language, as well as
+evaluation rules for an abstract machine, type rules, and importantly for the
+tool, type equality and coercion needed to coerce register files.
+% This section describes the process, the steps, and the considerations for
+% designing the risc-v styled typed assembly language suited for static
+% worst-case execution time analysis.
+% Only a subset of the idea of the language will be fully fleshed out, and an
+% even smaller part implemented.
+% The \say{full} language requires much too complex typing that involves
+% constraint satisfaction of predicate logic, far out of the scope of this
+% project, unfortunately.
+
+\say{The language} refers to the implementation TAL covered in this section, of
+which its syntax is presented in figure \ref{syn:my-tal}.
+All registers in a register file map to $\ttop$, except when otherwise noted.
+The register names follow the risc-v ABI names\cite{cod}.
+% If a register is not explicitly typed, it will default to \ttop.
 The jump instruction \jump is kept only to link blocks together, mimicking
 assembly fall-through.
 
@@ -33,11 +39,14 @@ share in some form, defined in some way as
         \text{value}      & v     & ::= & c \mid r \\
     \end{array}
 \end{equation*}
+as in figure \ref{syn:my-tal}.
 For code generation, these will have to be reintroduced, but this is trivial,
 since the value field will either be an immediate value or a register.
+This is described in section \ref{sec:lan-codegen}.
 
 Since all types are word sized, we replace the load and store instructions with
-$\load\ r_d,\ imm(r_s)$ and $\store\ r_s,\ imm(r_d)$
+$\load\ r_d,\ imm(r_s)$ and $\store\ r_s,\ imm(r_d)$ where $imm$ is a per-word
+offset, instead of the usual byte offset.
 
 % The \mv instruction also differs here, because it also works as a complete load
 % immediate instruction.
@@ -49,7 +58,8 @@ serve a very specific purpose in moving the start address of either the
 \scratch or \shared memory regions into register $r_d$.
 Initially I did not want to stray from risc-v, so using a combination of
 \var{lui} and \var{addi}, however that would create an incomplete type between
-the two instructions.
+the two instructions as well as having no real way of distinguishing between a
+number and an address.
 For a while, the second operand of \mv could be a value type $v$, which would
 then be translated to \var{lui} and \var{addi} if the type of $v$ called for it.
 But still, magic values for the memory region pointers were needed.
@@ -57,22 +67,27 @@ This is the problem \mvscratch and \mvshared attempt to solve, however ugly it
 may be.
 
 \subsection{Types}
-While the syntax of the language is inspired by DTAL, it is much simplified (or
-mangled, even).
+While the syntax of the language is inspired by DTAL, it is much simplified.
 This is also the case of the $\tau$ types, where only $a$, \ttop, $int$, and
-$int(i)$ remain. The array and stack types are still present but wrapped, but
+$int(i)$ remain.
+Where in DTAL $int(i)$ depended on the type index expressions, I have reduced
+it to only work on constant values.
+The array and stack types are still present but wrapped, but
 collections will be explained later.
 Universally quantified types, i.e. type variables are still present, although
-they do not serve a concrete function. Stack type variables are still present.
+they do not serve a concrete function in terms of the functionality wanted with
+respects to the tool. Stack type variables are still present, useful for
+working with \var{sp}.
 They are needed to append to a stack, which is needed for \incr.
 Specific for the language, region memory type variables have been introduced.
 They allow labels to be polymorphic over regions. This is an ergonomic must, as
-otherwise the programmer (or a compiler) would have to write labels for both
+otherwise the programmer would have to write labels for both
 \scratch and \shared.
 
 For the register file, this also means that any type that is not explicitly
 typed defaults to \ttop. This means that for later blocks, \ttop can freely be
-coerced into a new type.
+coerced into a new type, and vice versa. That is, any type information can be
+discarded.
 
 The dependent type $int(x)$ where $x$ is an index expression has been
 reintroduced as $int(i)$ to allow static evaluation of stack types in \incr and
@@ -84,8 +99,8 @@ This is reflected in their evaluation rules and typing rules in figure
 \ref{fig:eval-rules} and figure \ref{fig:typing-rules-values}, respectively.
 
 The type variable context strays from the inspiration (DTAL) by essentially a
-set of bindings. The inspiration comes from the hindley-milner
-algorithm\cite{pldi}.
+list of bindings from variables to types.
+% The inspiration comes from the hindley-milner algorithm\cite{pldi}.
 This choice also has a big implication on the type equality and coercion rules,
 as these now produce a side-effect, i.e. they change or add mappings to the
 context $\Delta$.
@@ -121,8 +136,11 @@ to a scalar, or is an array.
     \label{code:simple-alloc}
 \end{figure}
 A \malloc instruction is not suited in this case, since the target system
-contains multiple allocators (as discussed in section TODO: REF HERE, THE
-SYSTEM) working over memory regions.
+contains multiple allocators (as discussed in section \ref{sec:ssdos}) working
+over memory regions.
+A \malloc function is used in most TALs if they use dynamic memory allocation,
+because the introduction of types means that there need be a way to distinguish
+between arithmetic operations and pointer arithmetic.
 The problem then evolves into the question of how to design a type system that
 makes an allocator implicitly emit an array type, or a type that can be coerced
 into arrays.
@@ -151,24 +169,26 @@ Here, stacks are used not only for the call-stack, but general allocations, and
 to be coerced into array types.
 To communicate to the type system that we intend to modify a stack, we
 introduce two instructions \incr and \decr. They may be described through the
-code generation in \ref{fig:incr-codegen}. \incr decreases the stack pointer in
+code generation in \ref{fig:codegen}. \incr decreases the stack pointer in
 $r_s$ by $v$ words (removing the need for runtime alignment) and places the
 value in $r_d$ whose types will be that of $r_s$ with $v$ \ttop values
 appended to it, e.g.,
 \begin{lstlisting}[gobble=4]
-    main:   ('r)
-            [sp: 'r]
+    main:   [sp: 'r]
             incr    a0, sp, 4   ; a0 : top :: top :: top :: top :: 'r
 \end{lstlisting}
 where \lstinline{'r} is a stack type variable.
 \decr functions as expected, popping $v$ words off the stack.
+It is important to remember that the call stack grows \emph{downwards}, so \incr
+may at first sound counter intuitive because it \emph{decreases} the pointer.
 
 A programmer may not be interested in passing on \emph{the whole} stack after
 increasing the word count, such as stack arrays in C. If the type of a stack
 allocated array was the whole call-stack, not only would it obfuscate the
-intend, it would prevent memory safety (if the type system enforced such
-things).
-It is therefore desirable to \say{cut down} or slice a stack. This can be done
+intend, it would limit memory safety (if the type system enforced such
+things) since any stack-allocated array would be permitted to access the whole
+stack.
+It is therefore desirable to \emph{cut down} or slice a stack. This can be done
 by considering a stack $S$ a subtype of a stack $S'$ if $S$ is contained within
 $S'$ with a possibly empty tail. Or formally
 \begin{equation*}
@@ -179,38 +199,38 @@ $S'$ with a possibly empty tail. Or formally
     n \leq m
 \end{equation*}
 
-To illustrate the usefulness, we can expand on the previous code snippet:
-\begin{lstlisting}
-    main:   ('r)
-            [sp: 'r]
-            incr    a0, sp, 4   ; a0 : top :: top :: top :: top :: 'r
-    subtype:
-            [a0: top :: top :: top :: top]
-            ..
-\end{lstlisting}
 
-While \ttop is not so useful in of itself since it practically refers to
-garbage values, we will later introduce a subtyping rule to \ttop, specifically
-such that any type can be coerced from \ttop.
-This makes it possible to instantiate a stack of any type (although the
-language may not support so many types) without introducing special \say{typed}
-syntax to \incr and \decr, as DTALs $newarray[\tau]$.
-So really we could write:
-\begin{lstlisting}
-    main:   ('r)
-            [sp: 'r]
-            incr    a0, sp, 4   ; a0 : top :: top :: top :: top :: 'r
-    subtype:('a)
-            [a0: 'a :: 'a :: 'a :: 'a]
-            ..
-\end{lstlisting}
-for some type variable \var{'a}.
+% To illustrate the usefulness, we can expand on the previous code snippet:
+% \begin{lstlisting}
+%     main:   [sp: 'r]
+%             incr    a0, sp, 4   ; a0 : top :: top :: top :: top :: 'r
+%     subtype:
+%             [a0: top :: top :: top :: top]
+%             ..
+% \end{lstlisting}
+
+% While \ttop is not so useful in of itself since it practically refers to
+% garbage values, we will later introduce a subtyping rule to \ttop, specifically
+% such that any type can be coerced from \ttop.
+% This makes it possible to instantiate a stack of any type (although the
+% language may not support so many types) without introducing special \say{typed}
+% syntax to \incr and \decr, as DTALs $newarray[\tau]$.
+% So really we could write:
+% \begin{lstlisting}
+%     main:   [sp: 'r]
+%             incr    a0, sp, 4   ; a0 : top :: top :: top :: top :: 'r
+%     subtype: [a0: 'a :: 'a :: 'a :: 'a]
+%             ..
+% \end{lstlisting}
+% for some type variable \var{'a}.
 
 \subsubsection{Arrays}
-Since we have foregone array initialization instructions, we add the choice to
-coerce a stack containing only one type to an array of that type. This models C
-stack arrays quite well.
-
+Since we have foregone array initialization instructions such as $newarray$, we
+add the choice to coerce a stack containing only one type to an array of that
+type.
+% This models C stack arrays quite well.
+In section \ref{sec:ssdos} it is mentioned that the arena allocators work like
+a stack.
 
 \subsubsection{Array allocation using stacks}
 At this point we can subtype stacks to create smaller stacks, and we can
@@ -236,8 +256,7 @@ look like the program in figure \ref{code:ex-prog}.
         start:  [a0: int, a1: int, a2: int, a3: int]
         alloc:  [a0: int, a1: int, a2: int, a3: int]
                 incr    a4, sp, 4       ; a4: top :: top :: top :: top :: ..
-        store:  ('m)
-                [a0: int, a1: int, a2: int, a3: int, a4: 'm int array(4)]
+        store:  [a0: int, a1: int, a2: int, a3: int, a4: 'm int array(4)]
                 store   a0, 0(a4)
                 store   a1, 1(a4)
                 store   a2, 2(a4)
@@ -247,63 +266,63 @@ look like the program in figure \ref{code:ex-prog}.
     \label{code:ex-prog}
 \end{figure}
 
-\begin{figure}
-    \begin{equation*}
-        \begin{array}{lcl}
-            \Delta_0    & = & \cdot_{\mathrm{tv}} \\
-            \Delta_1    & = & \var{'sp} \\
-            \Delta_2    & = & \var{'m} \\
-            R_0         & = &
-            {
-                \texttt{a0}: int,
-                \texttt{a1}: int,
-                \texttt{a2}: int,
-                \texttt{a3}: int,
-            } \\
-            R_1     & = &
-            {
-                \texttt{a0}: int,
-                \texttt{a1}: int,
-                \texttt{a2}: int,
-                \texttt{a3}: int,
-                \texttt{sp}: \var{'sp}
-            } \\
-            R_2     & = &
-            {
-                \var{a0}: int,
-                \var{a1}: int,
-                \var{a2}: int,
-                \var{a3}: int,
-                \var{a4}: \var{'m}\ int\ array(4)
-            } \\
-            I_0         & = &
-                \begin{array}[t]{llll}
-                    \jump & \var{alloc} \\
-                \end{array}
-                \\
-            I_1         & = &
-                \begin{array}[t]{llll}
-                    \incr & \var{a4}, & \var{sp}, & 4 \\
-                    \jump & \var{store}
-                \end{array}
-                \\
-            I_2         & = &
-            \begin{array}[t]{llll}
-                    \store & \var{a0}, & 0(\var{a4}) \\
-                    \store & \var{a1}, & 1(\var{a4}) \\
-                    \store & \var{a2}, & 2(\var{a4}) \\
-                    \store & \var{a3}, & 3(\var{a4}) \\
-                    \halt
-                \end{array}
-                \\
-            B_0         & = & \lambda \Delta_0.(R_0, I_0) \\
-            B_1         & = & \lambda \Delta_1.(R_1, I_1) \\
-            B_2         & = & \lambda \Delta_2.(R_2, I_2) \\
-            P           & = & \var{start}: B_0;\ \var{alloc}: B_1;\ \var{store}: B_2 \\
-        \end{array}
-    \end{equation*}
-    \caption{Explanation of code in figure \ref{code:ex-prog}}
-\end{figure}
+% \begin{figure}
+%     \begin{equation*}
+%         \begin{array}{lcl}
+%             \Delta_0    & = & \cdot_{\mathrm{tv}} \\
+%             \Delta_1    & = & \var{'sp} \\
+%             \Delta_2    & = & \var{'m} \\
+%             R_0         & = &
+%             {
+%                 \texttt{a0}: int,
+%                 \texttt{a1}: int,
+%                 \texttt{a2}: int,
+%                 \texttt{a3}: int,
+%             } \\
+%             R_1     & = &
+%             {
+%                 \texttt{a0}: int,
+%                 \texttt{a1}: int,
+%                 \texttt{a2}: int,
+%                 \texttt{a3}: int,
+%                 \texttt{sp}: \var{'sp}
+%             } \\
+%             R_2     & = &
+%             {
+%                 \var{a0}: int,
+%                 \var{a1}: int,
+%                 \var{a2}: int,
+%                 \var{a3}: int,
+%                 \var{a4}: \var{'m}\ int\ array(4)
+%             } \\
+%             I_0         & = &
+%                 \begin{array}[t]{llll}
+%                     \jump & \var{alloc} \\
+%                 \end{array}
+%                 \\
+%             I_1         & = &
+%                 \begin{array}[t]{llll}
+%                     \incr & \var{a4}, & \var{sp}, & 4 \\
+%                     \jump & \var{store}
+%                 \end{array}
+%                 \\
+%             I_2         & = &
+%             \begin{array}[t]{llll}
+%                     \store & \var{a0}, & 0(\var{a4}) \\
+%                     \store & \var{a1}, & 1(\var{a4}) \\
+%                     \store & \var{a2}, & 2(\var{a4}) \\
+%                     \store & \var{a3}, & 3(\var{a4}) \\
+%                     \halt
+%                 \end{array}
+%                 \\
+%             B_0         & = & \lambda \Delta_0.(R_0, I_0) \\
+%             B_1         & = & \lambda \Delta_1.(R_1, I_1) \\
+%             B_2         & = & \lambda \Delta_2.(R_2, I_2) \\
+%             P           & = & \var{start}: B_0;\ \var{alloc}: B_1;\ \var{store}: B_2 \\
+%         \end{array}
+%     \end{equation*}
+%     \caption{Explanation of code in figure \ref{code:ex-prog}}
+% \end{figure}
 
 Another use is working with the arena allocators. They are simple, and also
 work like a stack, but these grow upwards, which is opposite the call stack and
@@ -339,7 +358,7 @@ therefore the typing rules would not work.
 % \lstinline{coerce} and \lstinline{arrays} may 
 
 
-While the purpose of the language is only typed memory regions, 
+% While the purpose of the language is only typed memory regions, 
 
 \subsection{Abstract machine}
     Unlike other TAL abstract machines, I am omitting the stack, since it will
@@ -358,24 +377,24 @@ While the purpose of the language is only typed memory regions,
     and state type $\sigma$.
 
 \subsection{Dynamic Semantics}
-Dynamic semantics is needed to evaluate the types throughout block execution
-for reasons discussed in section (TODO: REF IDEAS -- WHY NOT TRANSITIONS).
+% Dynamic semantics is needed to evaluate the types throughout block execution
+% for reasons discussed in section (TODO: REF IDEAS -- WHY NOT TRANSITIONS).
 
-Since we are explicit in the use of \var{sp} the abstract machine does not need
-to keep track of this.
-The heap is also omitted. We instead refer to hardcoded values: the start of
-each memory region.
-This means that
-\begin{lstlisting}
-    start:
-            mv      a0, SCRATCH_START
-\end{lstlisting}
-will set the type of \var{a0} in the register file to $\scratch S$, where
-\var{SCRATCH\_START} refers to an immediate value that points to the start of
-the scratch region.
-An abstract machine state $\mathcal M$ naturally reduces to just the register
-file.
-We define $\mathcal M = \mathcal R$ where $\mathcal R(r)$ is a constant.
+% Since we are explicit in the use of \var{sp} the abstract machine does not need
+% to keep track of this.
+% The heap is also omitted. We instead refer to hardcoded values: the start of
+% each memory region.
+% This means that
+% \begin{lstlisting}
+%     start:
+%             mv      a0, SCRATCH_START
+% \end{lstlisting}
+% will set the type of \var{a0} in the register file to $\scratch S$, where
+% \var{SCRATCH\_START} refers to an immediate value that points to the start of
+% the scratch region.
+% An abstract machine state $\mathcal M$ naturally reduces to just the register
+% file.
+% We define $\mathcal M = \mathcal R$ where $\mathcal R(r)$ is a constant.
 
 Similar to the treatment in DTAL, we introduce an instruction sequence $J_P$ of
 a program $P$, and $I_B$ for the instruction sequence in $B$ as
@@ -404,6 +423,11 @@ at $J_P(ic)$. Similarly $ic'$ is incremented or replaced in the case of \jump.
     \right.
 \end{equation*}
 Similar to DTAL.
+
+The evaluation of most instructions is given in figure \ref{fig:eval-rules},
+while the rest is easily inferred. For eval-mvscratch, $\rho_{scratch}$ refers
+to the stack value $\ttop_1 \cons \cdots \cons \ttop_n$ where $n$ is the size
+of the memory region in words.
 
 \begin{figure}
     \input{figs/eval-rules}
@@ -573,69 +597,102 @@ It is quite conceivable that the same type variable be used multiple times in
 the same register file, in this case the coercion type needs to be equal to the
 type already bound to the type variable in the type variable context.
 
-\subsection{Syntax}
-% The syntax for the language is described in figure \ref{syn:my-tal}, which
-% takes inspiration from DTAL\cite{xi-dtal}.
-% As have been discussed, in a complete language with control-flow, type variables should be reintroduced into index expressions.
-% 
-% An example program could look like figure \ref{code:mtal}
-% 
-% \begin{figure}
-%     \begin{lstlisting}[gobble=8]
-%         start:  [a0: int, a1: int, a2: int, a3: int]
-%                 subi    sp, sp, 16      ; sp: scratch top :: top :: top :: top :: 'r
-%                 mv      a4, sp
-%         coerce: ('m)
-%                 [a0: int, a1: int, a2: int, a3: int, a4: 'm int array(4)]
-%                 lw      a0, 0(a4)       ; a4: scratch int :: ..
-%                 lw      a1, 4(a4)       ; a4: scratch int :: int :: ..
-%                 lw      a2, 8(a4)       ; a4: scratch int :: int :: int ..
-%                 lw      a3, 12(a4)      ; a4: scratch int :: int :: int :: int :: 'r
-%     \end{lstlisting}
-%     \caption{Example program}
-%     \label{code:mtal}
-% \end{figure}
-A sample program could look like
-\begin{lstlisting}
-.meta
-        .wordsize 32
-        .scaddr 0x00010000
-        .scsize 0x00010000
-        .sctime 10
-        .shaddr 0x00080000
-        .shsize 0x10000000
-        .shtime 100
-        .artime 2
-                
-start:
-        []
-        mvscr   t1
-        add     a0, zero, 0
-        add     a1, zero, 1
-        add     a2, zero, 2
-        add     a3, zero, 3
-        j       alloc
-alloc:
-        []
-        incr    a4, sp, 4
-        j       write
-write:
-        [a0 : int, a1 : int, a2 : int, a3 : int, a4: mu int array(4)]
-        store a0, 0(a4)
-        store a1, 1(a4)
-        store a2, 2(a4)
-        store a3, 3(a4)
-        halt
-\end{lstlisting}
+% \subsection{Syntax}
+% % The syntax for the language is described in figure \ref{syn:my-tal}, which
+% % takes inspiration from DTAL\cite{xi-dtal}.
+% % As have been discussed, in a complete language with control-flow, type variables should be reintroduced into index expressions.
+% % 
+% % An example program could look like figure \ref{code:mtal}
+% % 
+% % \begin{figure}
+% %     \begin{lstlisting}[gobble=8]
+% %         start:  [a0: int, a1: int, a2: int, a3: int]
+% %                 subi    sp, sp, 16      ; sp: scratch top :: top :: top :: top :: 'r
+% %                 mv      a4, sp
+% %         coerce: ('m)
+% %                 [a0: int, a1: int, a2: int, a3: int, a4: 'm int array(4)]
+% %                 lw      a0, 0(a4)       ; a4: scratch int :: ..
+% %                 lw      a1, 4(a4)       ; a4: scratch int :: int :: ..
+% %                 lw      a2, 8(a4)       ; a4: scratch int :: int :: int ..
+% %                 lw      a3, 12(a4)      ; a4: scratch int :: int :: int :: int :: 'r
+% %     \end{lstlisting}
+% %     \caption{Example program}
+% %     \label{code:mtal}
+% % \end{figure}
+% A sample program could look like
+% \begin{lstlisting}
+% .meta
+%         .wordsize 32
+%         .scaddr 0x00010000
+%         .scsize 0x00010000
+%         .sctime 10
+%         .shaddr 0x00080000
+%         .shsize 0x10000000
+%         .shtime 100
+%         .artime 2
+%                 
+% start:
+%         []
+%         add     a0, zero, 0
+%         add     a1, zero, 1
+%         add     a2, zero, 2
+%         add     a3, zero, 3
+%         j       alloc
+% alloc:
+%         []
+%         incr    a4, sp, 4
+%         j       write
+% write:
+%         [a0 : int, a1 : int, a2 : int, a3 : int, a4: mu int array(4)]
+%         store a0, 0(a4)
+%         store a1, 1(a4)
+%         store a2, 2(a4)
+%         store a3, 3(a4)
+%         halt
+% \end{lstlisting}
 
-\subsection{Code Generation}
-\begin{figure}
-    \input{figs/codegen-incr-decr}
-    \caption{Code generation for \incr and \decr}
-    \label{fig:incr-codegen}
-\end{figure}
-
+\subsection{Code Generation}\label{sec:lan-codegen}
 \begin{figure}
     \input{figs/codegen}
-    \caption{codegen}
+    \caption{Code generation}
+    \label{fig:codegen}
 \end{figure}
+The target for code generation is risc-v32. This means that instructions that
+load addresses such as \mvscratch gets converted to the common
+\texttt{lui}-\texttt{addi} pattern.
+The reason wordsize is not set to 32 is because I wanted to be able to target
+risc-v64. The changes to code generation is small, since only the address
+loading has to change, as well as the value $wordsize$.
+Code generation is in general pretty straight forward, showcased in figure
+\ref{fig:codegen}.
+Arithmetic operations expand to either their I or R instruction
+formats\cite{cod}.
+
+Code generation contains variables that are set to  special values for scratch
+and shared addresses for \mvscratch
+and \mvshared, as well as the wordsize --- which will be 8.
+The meta data field in the implementation will be in bits
+which means that it gets divided by 8 to get the size in bytes.
+\mvscratch and \mvshared were introduced to instantiate the two collection types.
+
+The pseudo instructions could be expanded to handle more value types, such as
+with \load and \store, which only provide code given that $v$ is an immediate
+value.
+It is definitely possible to add code in the case where $v$ is a register by
+using pointer arithmetic. 
+By abstracting away pointer arithmetic, a language can provide better memory
+safety. The reason pointer arithmetic is problematic, is because a type system
+can not easily distinguish between addresses and integers. This follows from
+the reasoning behind the introduction of \mvscratch and \mvshared.
+That being said, I did not do this, since memory safety is not my focus.
+
+% The added pseudo instructions \incr and \decr are described in figure
+% \ref{fig:codegen}. Depending on whether the value field is a register or
+% immediate value, 
+
+% \begin{figure}
+%     \input{figs/codegen-incr-decr}
+%     \caption{Code generation for \incr and \decr}
+%     \label{fig:incr-codegen}
+% \end{figure}
+

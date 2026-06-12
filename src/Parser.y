@@ -25,7 +25,6 @@ import Data.Char
     inttype     { TokenIntType }
     array       { TokenArray }
     ':'         { TokenColon }
-    cons        { TokenCons }
     '('         { TokenLParen }
     ')'         { TokenRParen }
     '['         { TokenLBracket }
@@ -46,7 +45,7 @@ import Data.Char
     store       { TokenStore }
     var         { TokenVar $$ }
 
-%right ':' 'r'
+%right ':' 'r' ']'
 
 %%
 
@@ -63,10 +62,10 @@ Meta    : meta
 Text    : Text1 Text            { $1 : $2 }
         |                       { [] }
 Text1   : var ':' Block         { ($1, $3) }
-Block   : Context Instructions  {Block ($1, $2) }
-Context : '[' Bindings ']'      { $2 }
-Bindings : var ':' Type ',' Bindings { \r -> if r == (read $1) then $3 else $5 r }
-         |                      { defaultRegfile }
+Block   : '[' Context ']' Instructions  {Block ($2, $4) }
+Context : var ':' Type ',' Context { \r -> if r == (read $1) then $3 else $5 r }
+        | var ':' Type          { \r -> if r == (read $1) then $3 else defaultRegfile r }
+        |                       { defaultRegfile }
 Instructions
         : Instruction Instructions { $1 : $2 }
         | j var                 { [Jump (Label $2)] }
@@ -78,7 +77,7 @@ Type    : var                   { TVar (TypeVar $1) }
         | C                     { TCollection $1 }
 C       : MVar Type array '(' int ')' { Array $1 $2 (fromIntegral $5) }
         | MVar S                { CStack $1 $2 }
-S       : Type cons S           { SCons $1 $3 }
+S       : Type ':' ':' S        { SCons $1 $4 }
         | '[' ']'               { SEmpty }
         | var                   { SVar (StackTypeVar $1) }
 MVar    : scratch               { Scratch }
@@ -98,8 +97,8 @@ Instruction
         | mv var ',' var            { Mv (read $2) (read $4) }
         | mvscr var                 { Mvscr (read $2) }
         | mvshr var                 { Mvshr (read $2) }
-        | load var int '(' var ')'  { Load (read $2) (read $5) (toVInt $3) }
-        | store var int '(' var ')' { Store (read $2) (read $5) (toVInt $3) }
+        | load var ',' int '(' var ')' { Load (read $2) (read $6) (toVInt $4) }
+        | store var ',' int '(' var ')' { Store (read $2) (read $6) (toVInt $4) }
 
 {
 parseError :: [Token] -> a
@@ -126,7 +125,6 @@ data Token
     | TokenArithTime
     | TokenInt Integer
     | TokenColon
-    | TokenCons
     | TokenArray
     | TokenLParen
     | TokenRParen
@@ -154,17 +152,16 @@ data Token
     deriving (Show)
 
 lexer [] = []
-lexer (c:cs@(c':cs'))
+lexer (c:cs)
     | isSpace c = lexer cs
     | c == '(' = TokenLParen : lexer cs
     | c == ')' = TokenRParen : lexer cs
     | c == '[' = TokenLBracket : lexer cs
     | c == ']' = TokenRBracket : lexer cs
-    | c : c' : "" == "::" = TokenCons : lexer cs'
     | c == ':' = TokenColon : lexer cs
     | c == ',' = TokenComma : lexer cs
     | c == '.' = lexDot cs
-    | isAlpha c = lexAlpha (c:cs)
+    | isAlpha c || c == '_' = lexAlpha (c:cs)
     | isDigit c = lexNum (c:cs)
 
 lexNum ('0' : 'x' : cs) =
@@ -187,7 +184,7 @@ lexDot cs =
         ("artime", rest) -> TokenArithTime : lexer rest
 
 lexAlpha cs =
-    case span isAlphaNum cs of
+    case span (\c -> isAlphaNum c || c == '_') cs  of
         (label, ':' : rest) -> TokenVar label : TokenColon : lexer rest
         ("add", rest) -> TokenAdd : lexer rest
         ("sub", rest) -> TokenSub : lexer rest

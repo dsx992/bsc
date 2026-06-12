@@ -1,3 +1,81 @@
+All thesis with me have a variant of the following structure:
+
+1. Introduction
+
+Context - what the thesis is about
+Problem - the specific problem you focus on
+Approach - experimental, designing/implementing/evaluating a system
+Contribution - an itemized list of what you have done
+
+[Part 1 - "What others have done"]
+
+2. Background
+
+Any existing work (system, prog. language, algorithm) relevant to what you have
+done
+
+3. Related Work
+
+Existing work focusing on the same problem as you do.
+
+
+[Part 2 - "What you have done"]
+
+4*. Requirements
+
+A specification of the functional and non-functional requirements (performance,
+security, availability, ...) for your system, derived from an in-depth analysis
+of the problem definition. Note that requirements might be part of the Problem
+subsection of the introduction and may not require a full section.
+
+5. Design
+
+A description of the architecture of your system (interfaces and internal
+components with their relationships).
+
+A description of the design space (various options throughout the design of
+your system, described and compared), and of the design choices (which options
+you leave out, which options you decide to consider for your implementation and
+why (e.g., pros and cons)).
+
+6*. Implementation
+
+A description of the interesting aspects of the implementation. The parts you
+are proud of because they were hard, or because you came up with elegant
+solutions. This may be reduced to a subsection under Design.
+
+7. Evaluation
+
+The test of your system, convincing your readers, that you fulfilled the
+functional requirements.
+
+The evaluation of your system based on the non-functional requirements. The
+evaluation is experimental.
+
+You need to describe (i) the experimental framework, i.e., (a) the system under
+test (with the system parameters and possibly various design options described
+in 5), (b) the workload (i.e., the input of your system), (c) the metrics (what
+you measure), and (d) experiments (varying one system parameter or workload at
+a time).
+
+Experimental results. For each experiment, you should describe what you expect,
+what you observe and how you explain what you observe.
+
+8. Conclusion and Future work
+
+Note: Part 1 and Part 2 are not part of your Table of Contents. Just a logical
+separation in your document. You should never mix what others have done and
+what you have done.
+ 
+Note: In a BSc/MSc thesis, you might want to include a summary/discussion
+subsection at the end of each section to summarize what you have achieved in
+the section and look forward to what is going to happen/be described in the
+next section.
+
+
+---
+
+
 # rapport
 
 - Make an abstract machine to explain TAL (as the literature does) and use this

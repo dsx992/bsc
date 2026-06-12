@@ -1,0 +1,30 @@
+.meta
+        .wordsize 32
+
+        .scaddr 0x00010000
+        .scsize 128000
+        .sctime 10
+
+        .shaddr 0x00100000
+        .shsize 16000
+        .shtime 100
+
+        .artime 2
+_start:
+        []
+        add     a0, zero, 0
+        add     a1, zero, 1
+        add     a2, zero, 2
+        add     a3, zero, 3
+        j       alloc
+alloc:
+        []
+        incr    a4, sp, 4
+        j       write
+write:
+        [a0 : int, a1 : int, a2 : int, a3 : int, a4: mu int array(4)]
+        store a0, 0(a4)
+        store a1, 1(a4)
+        store a2, 2(a4)
+        store a3, 3(a4)
+        halt

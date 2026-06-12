@@ -1,17 +1,41 @@
-\section{\ssdos (The system)}
+\section{\ssdos and the machine}\label{sec:ssdos}
 
-We are not really considering a heap at all (even though obviously program text
-exists, and \var{.words} can exist there, too).
+% \ssdos is a real-time system for solid state drives using a tickbased pipeline
+% for program execution targeting risc-v.
 
-\subsection{Model}
-This project specifically targets the cacheless \texttt{v80}
-platform\cite{sigma}. It consists of four clusters with four AMD MicroBlaze V
-processors, each having its own scratchpad memory, and all clusters connected
-to a shared scratchpad, referred to as shared moving forwards.
-The key take-away is that shared memory is slower than scratch memory.
+\ssdos is an operating system for solid state drives running on risc-v
+processors.
+Programs running on the system is divided into ticks in a pipeline, where each
+tick is a fixed time interval.
 
-\subsection{Allocating}
+One of the target machines, MicroBlaze-V\cite{sigma} use --- instead of caches
+for its memory hierarchy --- scratch and shared memory.
+For a multi processor system, this means that each processor has its own
+scratch memory. Being wired specifically for each processor, this gives faster
+memory speeds. The other memory type is shared, of which each processor is
+wired to. This is however slower.
+% Each memory region is accessed by a specific memory address, as expected.
 
+Allocation on this system is done via application specific arena allocators,
+such as in figure \ref{code:arena} with an accompanying allocation function in
+figure \ref{code:alloc}. A simpler allocator simply returns the $\texttt{start}
++ \texttt{allocated}$  pointer and increases the \texttt{allocated} field by
+how much is being requested.
+This is essentially a stack.
+
+
+% We are not really considering a heap at all (even though obviously program text
+% exists, and \var{.words} can exist there, too).
+
+% \subsection{Model}
+% This project specifically targets the cacheless \texttt{v80}
+% platform\cite{sigma}. It consists of four clusters with four AMD MicroBlaze V
+% processors, each having its own scratchpad memory, and all clusters connected
+% to a shared scratchpad, referred to as shared moving forwards.
+% The key take-away is that shared memory is slower than scratch memory.
+% 
+% \subsection{Allocating}
+% 
 \begin{figure}
     \begin{lstlisting}[language=C, gobble=4]
         struct memory_region
@@ -54,4 +78,4 @@ The key take-away is that shared memory is slower than scratch memory.
     \caption{Example of an allocator function}
     \label{code:alloc}
 \end{figure}
-
+% 

@@ -1,7 +1,52 @@
-\section{Implementation (wrong title)}
+\section{Implementation}
+\begin{figure}
+    \begin{lstlisting}
+.meta
+        .wordsize 32
+        .scaddr 0x88000000
+        .scsize 128000
+        .sctime 4
+        .shaddr 0x00100000
+        .shsize 16000
+        .shtime 100
+        .artime 1
+
+_start: []
+        mvscr   a5
+        add     a1, zero, 1
+        add     a2, zero, 2
+        add     a3, zero, 3
+        add     a4, zero, 4
+        j       alloc
+
+alloc: [a5: mu rho]
+        mv      a0, a5
+        decr    a5, a5, 4
+        j       write
+
+write:
+        [a0 : mu int array(4), a1: int, a2: int, a3: int, a4: int]
+        store a1, 0(a0)
+        store a2, 1(a0)
+        store a3, 2(a0)
+        store a4, 3(a0)
+        load a1, 0(a0)
+        load a2, 1(a0)
+        load a3, 2(a0)
+        load a4, 3(a0)
+        halt
+    \end{lstlisting}
+    \caption{A TAL program}
+    \label{fig:a-prog}
+\end{figure}
+The full code will be available in my \href{https://github.com/dsx992/bsc}{git repository}.
+
+To give the tools the information they need regarding timings and addresses,
+each program must start with a \texttt{.meta} section as in figure
+\ref{fig:a-prog}. The ordering of the fields is absolute, but this is simply a
+parser issue.
 
 \subsection{Domain}
-
 Only a small subset of what has been discussed will be implemented, namely
 typing memory region types for the scratchpad system model.
 The typing rules will ensure that it is known before runtime of which memory
@@ -16,38 +61,188 @@ implemented is discussed. The biggest constraint and factor of deciding that
 control-flow is out of scope is due to the solving process (predicate logic SAT
 solving).
 
-\subsection{The tool}
-
+\subsection{The tool}\label{sec:the-tool}
 The tool shall take a program in the language specified in section
 \ref{sec:lan}, and produce an estimate of its runtime.
+From the language source code it creates a meta program, that is, a program as
+described in figure \ref{syn:my-tal} wrapped in some meta data that specifies
+memory addresses and timings for arithmetic, scratch memory, and shared memory
+operations.
+It shall trace the (linear) control-flow through the program and decorate each
+block with type variable contexts and update register files by coercion.
+This results in a list of instruction, registerfile instruction pair within
+each block, where each instruction cost can be summed up.
 
-From the code it produces a list of instruction and state type tuples, wherein
-the sum of each instruction time is calculated.
-For arithmetic instructions this will be constant, and for memory operations it
-will depend on the memory type.
-For the pseudo instructions, they will of course take what is equivalent to
-their code generation.
+I chose to implement the tool and code generation in haskell because of its
+pattern matching and because I wanted to try the language. This results in code
+that may not be haskell-idiomatic, what ever that may entail.
+I have deliberately chosen not to do complete pattern matches where they are
+not explicitly necessary because this made it easier to catch missing matches.
+
+Most of the logic can be boiled down to the following function:
+\begin{lstlisting}[language=haskell]
+tool (info, prog) =
+    do
+        blocks <- trace prog "_start"
+        -- append Halt hack such that the last block is calculated (is first in zip tuple)
+        let pairs = zip blocks (tail blocks ++ [Block (\r -> Top, [Halt])])
+        let delta = TypeVarContext [] [] []
+        totalcost delta pairs
+    where
+        totalcost :: TypeVarContext -> [(Block, Block)] -> Maybe Integer
+        totalcost _ [] = Just 0
+        totalcost delta ((b, Block (rf, _)) : pairs) =
+            do
+                fb <- flatten delta b           -- flatten current block.
+                eb <- evalB info delta fb       -- eval block to get block'.
+                rf' <- finalrf eb               -- gets the final regfile.
+                delta' <- coerce delta rf rf'   -- coerce next regfile to resolve type variables
+                (+) <$> cost delta eb <*> totalcost delta' pairs
+\end{lstlisting}
+where \texttt{totalcost} does the heavy lifting. It seems natural to explain
+the code in the order of execution.
 
 
+\subsubsection{Flattening}
+% The flatten function replaces any occurences of a variable in 
+\texttt{flatten} replaces occurrences of variables with their bindings in a type
+variable context.
+Instances are defined for types, collection types, memory types, and blocks,
+which possibly call each other recursively.
+Flattening a collection type means flattening both the memory type and either a
+stack type or a type of an array.
+The simple case is the regular type $\tau$.
+\begin{lstlisting}[language=haskell]
+instance Flatten Type where
+    flatten delta (TVar a)           = a `lookupTD` delta
+    flatten delta (TCollection c)    = TCollection <$> flatten delta c
+    flatten delta t                  = Just t
+\end{lstlisting}
+
+When calculating execution time blocks are flattened as the above code
+showcases in section \ref{sec:the-tool}.
+\begin{lstlisting}[language=haskell]
+instance Flatten Block where
+    flatten delta (Block (rf, insns)) =
+        do
+            pairs <- mapM moveM $ zip regs (flatrf <$> regs)
+            let rf' = fromMaybe Top . (`lookup` pairs)
+            return $ Block (rf', insns)
+        where
+            regs = [Zero ..]
+            flatrf = flatten delta . rf
+            moveM :: Monad m =>  (a, m b) -> m (a, b)
+            moveM (a, mb) =
+                do
+                    b <- mb
+                    return (a, b)
+\end{lstlisting}
+To flatten a block, the register file is flattened by flattening the type of
+each register and returning the resulting register file and the same
+instruction sequence.
+A register file is implemented as a function from registers to types.
+\begin{lstlisting}[language=haskell]
+type RegFile = (Register -> Type)
+\end{lstlisting}
+Flattening returns a \texttt{Maybe} value of whatever is being
+flattened. To get back to a register file (which is defined as a function) a
+function can be defined using the \texttt{lookup} prelude function with a
+default \ttop.
+So far, we only have (maybe) the flattened types. To use the \texttt{lookup}
+function, we create a tuple, but this has the signature \lstinline{(Register, Maybe Type)},
+thus \texttt{moveM} that extends the monad inside the tuple to
+contain the tuple.
+Then, because we have a list of (maybe) pairs, \texttt{mapM} turns the monad
+inside out to get a maybe list.
+Now the new register file function can be created.
+
+\subsubsection{Evaluation}
+\lstinline{evalB} evaluates a block in the sense that it records the register
+file state for each instruction in a block. The type of this is
+\texttt{Block'}, which is like a \texttt{Block}, but is a regfile instruction
+tuple.
+The function evaluates an instruction, saves the new regfile and instruction
+and evaluates the remaining instructions of a block with the new regfile
+\begin{lstlisting}[language=haskell]
+evalB :: Info -> TypeVarContext -> Block -> Maybe Block'
+evalB info delta (Block(rf, insn : insns)) =
+    do
+        rf' <- evalI info delta rf insn
+        ((rf', insn) :) <$> evalB info delta (Block (rf', insns))
+evalB _ _ (Block (rf, [])) = return []
+\end{lstlisting}
+resulting in a $(regfile, instruction)$ tuple; a \texttt{Block'}.
+The execution time of a block can then be calculated by folding the result on
+addition over the cost of each regfile-instruction pair.
+
+Back in \texttt{totalcost}, the final regfile is used to coerce into the next
+blocks register file.
+
+\subsubsection{Coercion}
+\begin{lstlisting}[language=haskell]
+instance TypeEq Type where
+    equiv delta (TVar a) (TVar a') =
+        let indom = isJust $ a `lookupTD` delta
+        in  indom && a == a'
+    equiv delta Top Top = True
+    equiv delta TInt TInt = True
+    equiv delta (TDInt i) (TDInt j) = i == j
+    equiv delta (TCollection c) (TCollection c') =
+        equiv delta c c'
+\end{lstlisting}
+
+% from the code it produces a list of instruction and state type tuples, wherein
+% the sum of each instruction time is calculated.
+% for arithmetic instructions this will be constant, and for memory operations it
+% will depend on the memory type.
+% for the pseudo instructions, they will of course take what is equivalent to
+% their code generation.
+
+% \subsection{parsing}
+% Parsing is done using \texttt{happy}, yacc for haskell with a simple lexer
+% inspired by the \texttt{happy} getting started guide.
+% 
+% % \subsection{abstract syntax}
+% 
+% \subsection{Decorating blocks}
+% A block, like in figure \ref{syn:my-tal} is a tuple of a register file and
+% instruction sequence.
+% \begin{lstlisting}[language=haskell]
+% newtype Block = Block (RegFile, InstructionSeq)
+% \end{lstlisting}
+% Given a list of blocks (A block being a regfile instruction-sequence)
+% 
+% \subsection{Summation}
+% 
+% \subsection{register file coercion}
+
+\subsection{code generation}
+% a separate tool shall construct compilable risc-v assembly code based on the
+% code generation presented in section \ref{sec:lan-codegen}.
+A separate tool constructs compilable risc-v assembly code based on the code
+generation presented in section \ref{sec:lan-codegen}.
+It uses the same lexer and parser resulting in the same abstract syntax tree,
+and then simply matches against figure \ref{fig:codegen}.
+Based on the meta data provided in the TAL file, it defines the scratch and
+shared memory regions as preprocessor macros.
 
 
-
-% Using dependently typed assembly language based on [OGI], 
+% using dependently typed assembly language based on [ogi], 
 % ...
 % 
-% \subsection{Theory (tentative title)}
+% \subsection{theory (tentative title)}
 % 
-% \subsubsection{Abstract machine}
-% This project focuses on \lstinline{ssd_os} and the machine that it runs on (or
+% \subsubsection{abstract machine}
+% this project focuses on \lstinline{ssd_os} and the machine that it runs on (or
 % perhaps will be run on) is a realtime system, and has no cache, but two states
-% of memory; scratch and shared. Scratch is fast, and acts like manual
+% of memory; scratch and shared. scratch is fast, and acts like manual
 % caching, while shared is slow.
-% The naming implies concurrency in that multiple threads may share some memory
+% the naming implies concurrency in that multiple threads may share some memory
 % -- as is exceedingly common.
 % 
-% \subsubsection{Extended DTAL (and possible exclusions)}
-% The only extension to DTAL that is needed is to type which kind of memory is
-% used; scratch or shared. To this end, we need the constructors
+% \subsubsection{extended dtal (and possible exclusions)}
+% the only extension to dtal that is needed is to type which kind of memory is
+% used; scratch or shared. to this end, we need the constructors
 % \begin{align}
 %     \epsilon ::&= &\texttt{scratch}\ \epsilon \\
 %              &| &\texttt{shared}\ \epsilon
@@ -59,4 +254,4 @@ their code generation.
 % to mean the address.
 % 
 % 
-% \subsection{Code (tentative title)}
+% \subsection{code (tentative title)}

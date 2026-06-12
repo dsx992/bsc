@@ -1,1 +1,50 @@
 \section{Introduction}
+
+\subsection{Context} % what the thesis is about
+% This project explores the application of typed assembly languages in static
+% worst-case execution time analysis.
+% 
+% In real-time systems the time it takes a program to run is per definition
+% greatly important, since a real-time system is defined as being able to execute
+% some code within a hard time limit.
+
+ssd\_os is an operating system for solid state drives (ssd) equipped with RISC-V
+processors, that provides a synchronous and deterministic programming model. A
+program is a collection of pipelines; each pipeline is a linear sequence of
+stages that execute to completion within a tick, i.e., a fixed period of time.
+Ideally, the programming toolchain verifies that a given stage can execute
+within a tick. This requires a static analysis of the RISC-V assembly program
+to reason about the deterministic nature of a stage or its worst-case execution
+time. In this project, we base our approach on typed assembler program. We rely
+on the assembly type system to reason about determinism or running time.
+
+\subsection{Problem} % the specific problem you focus on
+In this project the problem was reduced to designing a subset of a typed
+variant of risc-v to model a specific memory structure that used scratch and
+shared memory regions, and to use this language and abstract machine model to
+reason about the worst-case execution time of a program written in the typed
+assembly language.
+
+\subsection{Approach} % experimental, designing/implementing/evaluating a system
+The approach was design heavy in the sense that the language and tool were new.
+Initally, a lot of time was spent on considering in what way typed assembly (a
+tool used for correctness) could be used as a tool for execution time analysis.
+
+\subsection{Contribution} % an itemized list of what you have done
+The contents of this project --- what has been done, can be summarized as the following
+\begin{itemize}
+    \item
+        A brief presentation of the target system
+    \item
+        A high level overview of methods of worst-case execution time analysis
+    \item
+        An exploration of typed assembly
+    \item
+        How one may use typed assembly for worst-case execution time
+    \item
+        Designing a language based on the previous results and considerations
+    \item
+        and implementing a tool that analyses programs written in said language
+        to reason about execution-time analysis.
+
+\end{itemize}

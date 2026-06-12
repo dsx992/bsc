@@ -1,14 +1,90 @@
-\section{worst-case execution time analysis}
-
+\section{worst-case execution time analysis}\label{sec:wcet}
 Worst-case execution time analysis is an important step in the process of
-developing real-time systems\cite{wcet} like ssd\_os.
+developing real-time systems\cite{wcet} like \ssdos.
 In general, and is easily examplified, not all programs are subject to
 execution time analysis, nor do all programs exit.
-The former is a consequence of the halting
+The latter is a consequence of the halting
 problem\cite[ch.~13]{pldi} \cite{wcet}.
 
-\subsection{Observed observation time}
-end-to-end measurements
+% \subsection{What takes time?}
+During program execution the execution time is influenced by different factors.
+For one, the machine; processor frequency, memory speed, memory layout,
+pipelines.
+Within a program, the path of execution or control-flow can influence
+execution time.
+Depending on the operating systems scheduler guarantees on time bounds may or
+may not be available.
+One may have timed a userspace program, but what happens when a ps/2 keyboard
+sends an interrupt? Naturally normal program execution must pause, which may
+cause the expected time for said program to increase.
+
+% \subsubsection{Memory}
+Modern hardware is severely limited by memory speed, often called the memory
+wall\cite{pcod}. To this end, complex memory layouts and cache hiearchies are
+used to limit the time it takes to access memory.
+From this, notions of cache coherence and locality are worked into programming
+practices to improve performance.
+Pipelines can start work on other instructions while waiting for memory.
+However, a program rarely has control over the cache and rarely is a program
+run in isolation, making it nontrivial to predict memory performance.
+This means that you can not generally reason about the cache, as even if you
+know a program just had a cache miss and is going to fetch, another process may
+do the same, causing an unexpected cache miss again.
+
+% \textit{context dependence of execution time} and \textit{timing
+% anomalies}
+
+% \subsubsection{Control flow}
+Loops and therefore conditional branching are an important part of any computer
+program, and depending on what path a program may take, the execution time will
+vary.
+As mentioned, it is not generally trivial to reason about execution time of
+programs at compile time, which, besides the architecture such, can be caused
+simply from the language constructs.
+Recursion is perhaps the simplest form of looping where halting is not trivial.
+Some loops \emph{can} be reasoned about at compile time --- these are called
+type-1 loops\cite{pldi}.
+Loops of this type range over a fixed set of iterations, such as
+\begin{lstlisting}
+for (int i = 0; i < 16; i++)
+        do something..
+\end{lstlisting}
+The structure of a type-1 \texttt{for} loop is something that can be reasoned
+about in a high level language, but the compiled programs assembly does not
+retain this information, since it will be compiled down to conditional and
+unconditional jumps.
+% loop types.
+
+% \subsection{Static Analysis}
+WCET analysis does not necessarily have to be statically determined.
+Measurements, observed execution time
+One can use empirical results to get an estimate of execution time of a program
+by repeatedly running said program and conducting end-to-end measurements.
+This produces a \textit{maximal observed execution time}, but gives no
+guarantee of an actual upper bound of execution time and will therefore in
+general underestimate the worst-case execution time\cite{wcet}.
+This (pragmatic) approach is sufficient in a lot of cases and much simpler to
+execute.
+
+For real-time systems, it needs to be proven that a program will not exceed
+some time limit, of which measurements are not enough. 
+
+The top-down view of static analysis consists in taking (possibly annotated)
+source code and analyzing the paths through a control-flow graph, and using an
+abstract machine or other specification of a concrete hardware "sum up" up the
+code.
+The source code may be annotated such as in PCC\cite{attpl} or
+TAL\cite{tal-toplas} (which is my focus), or it may be regular code\cite{p10}
+constrained to a subset of the original language, such as C with clear control
+flow, i.e. bounded loops and no recursion.
+By using a high-level language, abstractions are introduced that may also aid
+in determining the intent of code and construct a more precise control-flow
+graph, eliminating dead branches.
 
 
-\subsection{static analysis}
+% however not for a real-time system that needs to be deterministic.
+% % Static analy
+% Only some control flow constructs can be analyzed statically, namely type-1
+% loops\cite{pldi} --- loops whose iterations are known at compile time.
+
+% \subsection{Complexities}

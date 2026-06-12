@@ -5,6 +5,7 @@ import Coercion
 import Eval
 import Flatten
 import Parser
+import System.Exit
 
 emptyD :: TypeVarContext
 emptyD = TypeVarContext {alpha = [], mem = [], stack = []}
@@ -60,4 +61,14 @@ p = [("start", b0), ( "alloc", b1), ( "store", b2)]
 
 main :: IO ()
 main =
-    getContents >>= print . parse . lexer
+    getContents >>= printResult . tool . parse . lexer
+    -- getContents >>= print
+    where
+        printResult (Just time) =
+            do
+                print time
+                exitWith ExitSuccess
+        printResult Nothing =
+            do
+                print "Error."
+                exitWith $ ExitFailure 1

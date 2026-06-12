@@ -1,0 +1,34 @@
+.meta
+        .wordsize 32
+        .scaddr 0x88000000
+        .scsize 128000
+        .sctime 4
+        .shaddr 0x00100000
+        .shsize 16000
+        .shtime 8
+        .artime 1
+
+_start: []
+        mvshr   a5
+        add     a1, zero, 1
+        add     a2, zero, 2
+        add     a3, zero, 3
+        add     a4, zero, 4
+        j       alloc
+
+alloc: [a5: mu rho]
+        mv      a0, a5
+        decr    a5, a5, 4
+        j       write
+
+write:
+        [a0 : mu int array(4), a1: int, a2: int, a3: int, a4: int]
+        store a1, 0(a0)
+        store a2, 1(a0)
+        store a3, 2(a0)
+        store a4, 3(a0)
+        load a1, 0(a0)
+        load a2, 1(a0)
+        load a3, 2(a0)
+        load a4, 3(a0)
+        halt

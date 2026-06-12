@@ -1,4 +1,4 @@
-module Tool(Tool.trace, decorate, tool) where
+module Main where
 
 import Syntax
 import Coercion
@@ -7,7 +7,8 @@ import Eval
 import Data.List
 import Data.Foldable
 import Data.Maybe
-import Debug.Trace
+import System.Exit
+import Parser
 
 {- WCET
  - wcet takes in a wrapped program with meta data,
@@ -28,26 +29,41 @@ import Debug.Trace
 --   + the recursive call.
 -- 
 -- [(b, b'), (b', b''), ..] ->
+
+main :: IO ()
+main =
+    getContents >>= printResult . tool . parse . lexer
+    -- getContents >>= print
+    where
+        printResult (Just time) =
+            do
+                print time
+                exitWith ExitSuccess
+        printResult Nothing =
+            do
+                putStr "Error.\n"
+                exitWith $ ExitFailure 1
 --      
 
 tool :: Program -> Maybe Integer
 tool (info, prog) =
     do
-        blocks <- Tool.trace prog "start"
+        blocks <- trace prog "_start"
         -- append Halt hack such that the last block is calculated (is first in zip tuple)
-        let pairs = zip blocks (tail blocks ++ [Block ((\r -> Top), [Halt])])
+        let pairs = zip blocks (tail blocks ++ [Block (\r -> Top, [Halt])])
         let delta = TypeVarContext [] [] []
-        f delta pairs
+        totalcost delta pairs
     where
-        f :: TypeVarContext -> [(Block, Block)] -> Maybe Integer
-        f _ [] = Just 0
-        f delta ((b, Block (rf, _)) : pairs) =
+        totalcost :: TypeVarContext -> [(Block, Block)] -> Maybe Integer
+        totalcost _ [] = Just 0
+        totalcost delta ((b, Block (rf, _)) : pairs) =
             do
-                fb <- flatten delta b
-                eb <- evalB info delta fb
-                rf' <- finalrf eb
-                delta' <- coerce delta rf rf'
-                (+) <$> (cost delta eb) <*> f delta' pairs
+                fb <- flatten delta b           -- flatten current block.
+                eb <- evalB info delta fb       -- eval block to get block',
+                                                -- instruction regfile pair.
+                rf' <- finalrf eb               -- gets the final regfile.
+                delta' <- coerce delta rf rf'   -- coerce next regfile to resolve type variables
+                (+) <$> cost delta eb <*> totalcost delta' pairs
 
         finalrf :: Block' -> Maybe RegFile
         finalrf ([]) = Nothing
@@ -55,7 +71,7 @@ tool (info, prog) =
         finalrf (ri : ris) = finalrf ris
 
         cost :: TypeVarContext -> Block' -> Maybe Integer
-        cost delta (blocks) = 
+        cost delta blocks = 
             foldl
                 (\macc (rf, insn) ->
                     (+)
@@ -78,7 +94,7 @@ trace prog entry =
         block@(Block (_, insns)) <- snd <$> find ((entry ==) . fst) prog
         -- let tail = fromMaybe [] (next insns >>= trace prog)
         -- return $ block : tail
-        case next insns >>= Tool.trace prog of
+        case next insns >>= trace prog of
             Just tail   -> return $ block : tail
             Nothing     -> return [block]
 
@@ -108,12 +124,14 @@ decorate info delta (b@(Block(rf, _)) : b'@(Block(rf', _)) : bs) =
         finalrf ([]) = Nothing
     
 --  | Calculates the cost of one instruction based on code gen and memory type
+--  | https://docs.amd.com/r/en-US/ug1629-microblaze-v-user-guide/Instructions
 costI :: Info -> TypeVarContext -> RegFile -> Instruction -> Maybe Integer
 costI info delta rf insn
     | Add {} <- insn            = Just arit
     | Sub {} <- insn            = Just arit
     | Mul {} <- insn            = Just arit
-    | Div {} <- insn            = Just arit
+    | Div {} <- insn            = Just $ arit * 30
+    | Mv _ _ <- insn            = Just arit
     | Incr _ _ (Reg _) <- insn  = Just $ 2 * arit
     | Incr _ _ (VInt _) <- insn = Just arit
     | Decr _ _ (Reg _) <- insn  = Just $ 2 * arit
@@ -124,15 +142,15 @@ costI info delta rf insn
     , Just (TCollection c) <- flatten delta (rf rd) = costC c
     | Mvscr _ <- insn           = Just arit
     | Mvshr _ <- insn           = Just arit
-    | Jump _ <- insn            = Just 0
-    | Halt <- insn              = Just 0
+    | Jump _ <- insn            = Just arit
+    | Halt <- insn              = Just $ (1 + 1 + 5) * arit -- ecall + li's
 
     where
         (Info {scratchtime = scratch, sharedtime = shared, arittime = arit}) = info
 
         costC :: CollectionType -> Maybe Integer
-        costC (CStack m _) = Just scratch
-        costC (Array m _ _) = Just scratch
+        costC (CStack m _) = costM m
+        costC (Array m _ _) = costM m
 
         costM :: MemType -> Maybe Integer
         costM Scratch = Just scratch

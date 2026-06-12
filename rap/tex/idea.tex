@@ -1,21 +1,76 @@
-\section{Possibilities}
+\section{Exploring the options}\label{sec:options}
+This section covers the different ways one may use typed assembly languages in
+aiding with worst-case execution time analysis.
+Somehow we need to use a tool (TAL) usually attributed to safety and
+correctness for execution time analysis.
+At this point we know that we need static analysis, and that we can design a
+low level language that may be annotated with type information.
+The type rules may in turn provide safer code, but they could encode promises
+of values as with dependent types.
+As mentioned in section\ref{sec:wcet} the information regarding a loop type is
+lost in compilation.
+This is similar to the complaint and motivation behind TAL in that the last
+$20\%$\cite{tal-toplas} or so of compilation is untyped.
 
-\subsection{Control flow}
-    One of the motivations behind typed assembly languages as presented earlier
-    (TODO: REF SECTION) is control flow.
-    TAL-0 introduces types to code to restrict where jumps are allowed to
-    target.
-    Control-flow in regards to execution time analysis is not so interested in
-    the validity of jumps but on the amount of jumps, i.e. loops.
+One option is to use dependent types to aide the traversal of a control-flow
+graph of a program and using the index constraints to prove the termination of
+loops and to reason about the iterations.
+If simplifying a machine such that all operations take equal time, then the
+time it takes for each block to execute is a set of values corresponding each
+path within a block.
+This means that a block without any jumps would take the same time to execute
+each time it was executed; a block with one jump would take one of two
+execution times.
+For multiple jumps, it either branches or it does not.
+One could then construct a graph of blocks, where each edge is a jump to
+another block, and where each edge is decorated with the branch condition
+(\texttt{bge}, \texttt{glt}, etc.) and the types of the registers.
+% \subsection{Control flow}
+%     One of the motivations behind typed assembly languages as presented earlier
+%     (TODO: REF SECTION) is control flow.
+%     TAL-0 introduces types to code to restrict where jumps are allowed to
+%     target.
+%     Control-flow in regards to execution time analysis is not so interested in
+%     the validity of jumps but on the amount of jumps, i.e. loops.
+% 
+%     Control-flow graph
+% 
+%     By using DTAL and considering a program an oriented graph where blocks are
+%     nodes and branches are edges to create something like a control-flow graph.
 
-    Control-flow graph
+\subsection{Typing memory}\label{sec:idea-mem}
+Another idea is to focus on the second part of static analysis, namely the
+machine. This is what will be implemented.
 
-    By using DTAL and considering a program an oriented graph where blocks are
-    nodes and branches are edges to create something like a control-flow graph.
+As mentioned in section \ref{sec:wcet} memory timing is difficult to decide
+because it usually involves layers of cache, and is generally outside the reach
+of an application programmer. That is, the programmer nor the program decide
+when and what data is stored in different types of memory.
+This is not the case in the system described in section \ref{sec:ssdos}. There,
+data needs to be explicitly moved to different memory regions, which boils down
+to different address ranges.
+% The idea is to introduce types that reflect memory regions of a computer with
+% different speeds, such that the types are used to determine how long an IO
+% operation will take.
+% The 
+% Since the chosen platform is explicit in its memory hierarchy, which enables it
+% to be explicit in code as well. This can be done through a type system, so any
+% array or stack type is wrapped inside a memory region context.
+% Since the platform has an explicit memory hierarchy in the sense that a programmer can manipulate it
+If we assume that an existing TAL has collection types such as array
+types\cite{xi-dtal} or stacks\cite{stal}, we can wrap these in memory regions.
+Instead of having an $int\ array(i)$ you have a $\scratch\ int\ array(i)$ then
+this type information can be used to deduce the execution time, given that the
+memory access time remain constant for the regions.
+Type variables for memory types can be introduced to make procedures
+polymorphic on memory types, meaning that code need not be written for scratch
+\emph{and} shared.
 
-\subsection{Typing memory}
-    The chosen platform is explicit in its memory hierarchy, which enables it
-    to be explicit in code as well. This can be done through a type system, so
-    any array or stack type is wrapped inside a memory region context.
+Relating back to section \ref{sec:wcet}, assembly code would be annotated with
+type information. The potential memory types is part of the specification of an
+abstract machine that, paired with machine specific information on how long
+reads and writes takes for each region can determine an upper bound for the
+execution time of a program.
 
-\subsection{}
+The design of the language and the specifics will be explored and explained in
+section \ref{sec:lan}.

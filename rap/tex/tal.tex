@@ -6,17 +6,32 @@ written or compiled to assembly. The primary motivation for typed assembly
 languages is type safety and is strongly related to proof-carrying
 code\cite[ch. 5]{attpl}.
 
-In this section we will cover the canonical reason for introducing types as
-well as exploring levels of typing and implementations.
-Most of this section is based on Greg Morrissetts work whom has contributed
-most of the published research in this topic.
+% In this section we will cover the canonical reason for introducing types as
+% well as exploring levels of typing and implementations.
+% Most of this section is based on Greg Morrissetts work who has contributed
+% most of the published research in this topic.
 
 
-\subsection{Why type safety in assembly?}
+% \subsection{Why type safety in assembly?}
+% Running untrusted code
+Type checking is an integral part of modern programming languages due to the
+conveniences they afford.
+Values may have different properties, such as the differences between boolean
+and integer values and the operations permitted on them, or as will the topic
+surrounding the explanation of TAL-0, labels or addresses and regular values.
+Modern type systems can catch a large range of
+semantic errors such at jumping to a garbage value or memory safety either at
+compile time, run time, or a mix of both\cite{pldi}.
 
-Running untrusted code
+% TODO: dotnet and jvm
 
 \subsection{TAL-0}
+\begin{figure}
+    \input{figs/tal0-syn}
+    \caption{instructions and operands for the \talz language}
+    \label{eq:tal0-ops}
+\end{figure}
+
 As with PCC, it is of great interest to prove correctness of code. In modern
 programming languages this is done in part with a strongly typed syntax and
 semantics as \say{well-typed programs cannot \say{go wrong}}, thus moving some
@@ -38,55 +53,152 @@ address.
 \talz solves this by special syntax and an abstract machine that only allows
 some evaluation; the above assembly snippet would be disallowed by the
 evaluation rules.
+Evaluation rules enable abstract machines to transition, i.e. go from machine
+$M$ to $M'$.
+The above jump would be evaluated with the following evaluation rule
+\begin{equation*}
+    \infer[(\text{JUMP})]
+    {(H, R, \texttt{jump}\ v) \rightarrow (H, R, I)}
+    {H(\hat R (v)) = I}
+\end{equation*}
+Where $H$ is a heap mapping that maps labels $\ell$ to heap values $h ::= I$,
+$R$ is a register file that maps register $r_n$ to the value (or operand, as
+\talz refers them as) $v_n$ and $\hat R$ lifts $R$ to work on operands;
+\begin{align*}
+    \hat R(r) &= R(r) \\
+    \hat R(n) &= n \\
+    \hat R(\ell) &= \ell \\
+\end{align*}
+and an abstract machine $M$ is defined as the tuple $(H, R, I)$ and an
+evaluation evaluates an abstract machine state and returns another state $M
+\rightarrow M'$.
+This makes it impossible for a machine to jump to a nonsensical value ---
+however it does not preemptively flag the program as incorrect. In other words,
+the machine can get stuck, since not every well-formed machine can be
+evaluated, i.e. there does not exist an evaluation such that $M \rightarrow
+M'$.
 
-\begin{figure}
-    \begin{equation*}
-        \begin{array}{l|r}
-            \begin{array}{lllr}
-                r   & ::=   &       & \textit{registers:} \\
-                    &       & \texttt{r1} \mid \cdots \mid \texttt{rk} & \\
-                v   & ::=   &       & \textit{operands:} \\
-                    &       & n     & \textit{integer literal} \\
-                    &       & \ell  & \textit{label or pointer} \\
-                    &       & r     & \textit{registers}
-            \end{array}
-            &
-            \begin{array}{lllr}
-                \iota & ::= &       & \textit{instructions:} \\
-                      &       & r_d \texttt{:=} v & \\
-                      &       & r_d \texttt{:=} r_s + v & \\
-                      &       & \texttt{if } r \texttt{jump v} v & \\
-                I   & ::=   &       & \textit{instruction sequences:} \\
-                    &       & \texttt{jump } v  & \\
-                    &       & \iota; I  &
-            \end{array}
-        \end{array}
-    \end{equation*}
-    \caption{instructions and operands for the \talz language}
-    \label{eq:tal0-ops}
-\end{figure}
+By introducing a type system, one can prevent the abstract machine from
+reaching a stuck state. To handle the earlier example with jumps, the following
+rules would prevent the machine from getting stuck.
+\begin{equation*}
+    \begin{array}{c}
+        \infer[(\text{S-ADD})]
+            {\Psi \vdash \texttt{jump}\ v \colon \texttt{code}(\Gamma)}
+            {\Psi; \Gamma \vdash v \colon \texttt{code}(\Gamma)}
+        \\
+        \deduce
+            {\Psi \vdash \ell : \Psi(\ell)}
+            {}\ 
+            (\text{S-LAB})
+    \end{array}
+\end{equation*}
+where $\Psi$ is a heap that maps labels $\ell$ to types $\tau$, $\Gamma$ is a
+register file type that map registers $\rho$ to types $\tau$, and $\tau ::=
+\texttt{code}(\Gamma)$ is a label to some code.
+The above judgements says that the type of a jump is that of the value iff the
+value is a valid address.
 
-By figure \ref{eq:tal0-ops}, the previous code snippet would look like
+% \subsection{Stack Types}
+% There are a lot of flavours of typed assembly, but important to me is stacks.
+
+\subsection{Dependent Types}
+Dependent types introduce singleton types that are constructed with an
+argument, and whom may interact with each other in the sense that for two
+values $x \colon int(3)$ and $y \colon int(4)$, the expression $x + y$ would
+return a value with the type $int(7)$. A dependent type may be
+defined as $\tau ::= int(x)$\cite{xi-dtal} where $x$ is an index expression.
+Index expressions may be integer literals $i$, type variables $a$ or arithmetic
+operations on other index expressions.
+Index expressions are used within index contexts $\Phi$ where a type variable
+may be bound to an index \textit{sort} (like a type, but separate from the
+"regular" type system). Within here, index propositions $P$ on index
+expressions may occur, which are logic operations on index expressions.
+This is explained in Xi's \textit{A dependently typed assembly language}.
+% \begin{equation*}
+%     \begin{array}{rrcl}
+%         \text{index expressions} & 
+%     \end{array}
+% \end{equation*}
+
+With the introduction of dependent types, it is no longer trivial to determine
+whether types are equal; we are no longer concerned whether $int \equiv int$,
+but rather $int(x) \equiv int(y)$, where $x$ and $y$ both are index expressions
+that may contain references to type variables and arithmetic operations.
+To determine the equality one must use constraint module
+satisfaction\cite{xi-dtal}, a type of SAT solving for first order logic, which
+definitely is not trivial\cite{lics}.
+
+Dependent types provide a way to ensure safe array indexing, as one may define
+a sum function as the following risc-v styled TAL:
 \begin{lstlisting}
-jump:
-    jump        r1
+sum:    {n:nat}[a0:int array(n), a1:int array(n)]
+        li      a2, 0
+        li      a3, 0
+
+loop:   {n:nat, i:nat, c:int | i < n}
+        [a0:int array(n), a1:int array(n), a2: int(i), a3: int(c)]
+        bge     a2, a1, finish  // i >= n
+        muli    a5, a2, 4
+        add     a5, a5, a0
+        lw      a4, 0(a5)
+        add     a3, a3, a4      // c+= a0[i]
+        addi    a2, a2, 1       // i++
+        j       loop
+
+finish: {c:int}[a3: int(c)]
+        mv      a0, a3
 \end{lstlisting}
+which is still doing unsafe arithmetic, but if you limited the language to
+indexing exactly like this, you would eliminate indexing out of bounds.
+So while dependent types is not immediately sufficient in a risc-v language, it
+does not require many changes.
+The code examples indexing could be be replaced be a pseudo instruction $\load\
+r_d,\ v(r_s)$ where value is either an immediate value or a register containing
+a natural number less than the length of the array in $r_s$.
+
+An important distinction between type bound registers  in TAL and type bound
+variables in most high-level languages, is that registers may change their
+type.
+This means that the instance of an $r_d$ register at some point in execution
+for an instruction is dead after the instruction.
+For example, in the previous code example, the type of \var{a5} is $top$ (no
+value) until it is assigned in \var{muli}, of where the type --- depending on
+how types are propagated --- $int$ or $int(i * 4)$. This also has the
+consequence that while $i < n$ at the beginning of the block, it is not
+promised throughout the block execution, and so indexing out of bounds may
+still happen depending on how types are propagated, and whether they can be
+determined at compile time.
+
+The language in Xis DTAL still inserts runtime checks whenever it can not be
+statically verified through the type system.
+
+Conceptually one may think of typed assembly as entry conditions for a block.
+
+% An interesting (lesser) application is in converting between stacks and 
 
 
-\subsubsection{The abstract machine}
-The abstract machine presented here is in accordance to Morrissets TAL-0. The
-machine presented here will be extended in future sections.
+% By figure \ref{eq:tal0-ops}, the previous code snippet would look like
+% \begin{lstlisting}
+% jump:
+%     jump        r1
+% \end{lstlisting}
 
-\subsubsection{Typing rules}
 
-$ftv(\tau)$ is the set of free variables for $\tau$. Not sure where it looks to
-determine free-ness? a variable $x$ is bound in $\tau$ if $\forall x.\tau$, but
-i think this may be a writing mistake? Surely it should be like $ftv(\forall
-x.y) = \{ y \}$ while $ftv(\forall x.x) = \{ \emptyset \}$
+% \subsubsection{The abstract machine}
+% The abstract machine presented here is in accordance to Morrissets TAL-0. The
+% machine presented here will be extended in future sections.
+% 
+% \subsubsection{Typing rules}
+% 
+% $ftv(\tau)$ is the set of free variables for $\tau$. Not sure where it looks to
+% determine free-ness? a variable $x$ is bound in $\tau$ if $\forall x.\tau$, but
+% i think this may be a writing mistake? Surely it should be like $ftv(\forall
+% x.y) = \{ y \}$ while $ftv(\forall x.x) = \{ \emptyset \}$
 
-\subsubsection{Soundness}
-
-The proof relies on the abstract machine not getting stuck.
+% \subsubsection{Soundness}
+% 
+% The proof relies on the abstract machine not getting stuck.
 
 
 

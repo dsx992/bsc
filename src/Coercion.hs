@@ -67,7 +67,7 @@ instance TypeCo CollectionType where
                 return delta''
             else
                 Nothing
-    coerce delta (Array m _ 0) (CStack m' SEmpty) =
+    coerce delta (Array m _ 0) (CStack m' _) =
         coerce delta m m'
     coerce delta (Array m t i) (CStack m' (t' `SCons` s)) =
         do

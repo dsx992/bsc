@@ -1,22 +1,37 @@
-\documentclass{article}
+\documentclass[12pt]{article}
 
+\usepackage{KUstyle}
 \usepackage{rapport}
 
-\title{Typed assembly for worst-case execution time analysis}
+\ptype{bachelor's thesis}
 \author{Marcus Janum}
+\title{Typed assembly for worst-case execution time analysis}
+\subtitle{}
+\date{Date: {June 2026}}
+\advisor{Advisor: {Philippe Bonnet}}
 
 \begin{document}
 
 \maketitle
 \newpage
 
+\tableofcontents
+\listoffigures
+\newpage
+
 \input{tex/intro}
-\input{tex/tal}
-\input{tex/wcet}
+\newpage
+
 \input{tex/ssdos}
+\input{tex/wcet}
+\input{tex/tal}
+
 \input{tex/idea}
 \input{tex/lan}
 \input{tex/impl}
+
+\input{tex/eval}
+\input{tex/conclusion}
 
 \newpage
 \bibliographystyle{plain}
